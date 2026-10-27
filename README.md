@@ -1,66 +1,27 @@
-# HubSpot Contact Point
+# Contact Point
 
-A Chrome extension for HubSpot contact workflows with fast template-driven outreach.
+A Chrome extension for people who live in HubSpot. Write your email, WhatsApp and note templates once, then send them from any contact with their name already filled in.
 
-## What It Does
+[![Contact Point](docs/screenshot.png)](https://chromewebstore.google.com/detail/contact-point/lbkmdchppdedcpbodhnefeokaldihfmm)
 
-- Extracts visible contacts from HubSpot contact tables
-- Provides row actions using symbols/icons for:
-  - `Email` (pick template and prefill HubSpot email composer)
-  - `WhatsApp` (pick template and open WhatsApp Web message)
-  - `Notes` (load notes and create notes)
-- Supports an `Active Tab` workspace to run Email/WhatsApp/Notes actions directly from the currently open HubSpot contact tab
-- Exports selected contacts to CSV/VCF
-- Copies selected emails
-- Includes dedicated managers for Email, WhatsApp, and Note templates
-- Persists per-contact sent indicators for Email/WhatsApp template usage
-- Supports dark mode for extension UI and optional HubSpot theming
+**[Get it on the Chrome Web Store](https://chromewebstore.google.com/detail/contact-point/lbkmdchppdedcpbodhnefeokaldihfmm)**
 
-## Quick Start (Local Install)
+## What you get
 
-1. Open `chrome://extensions`
-2. Enable **Developer mode**
-3. Click **Load unpacked**
-4. Select this folder: `contact-point`
-5. Open a HubSpot page under `https://app.hubspot.com/*`
-6. Click the extension icon to open Contact Point
+- Email, WhatsApp and note templates, one click away on every contact
+- Emails open as a filled-in HubSpot draft. Nothing sends without you.
+- A mark on each contact showing which templates you've already used
+- Export selected contacts to CSV or vCard, or copy their emails
+- Dark mode for the extension and, if you want, for HubSpot too
 
-## Permissions
+## Run it from source
 
-- `storage`: save extension settings and templates
-- `tabs`: find/open HubSpot tabs and contact records
-- Content script scope: `https://app.hubspot.com/*`
+1. Open `chrome://extensions` and turn on **Developer mode**
+2. Click **Load unpacked** and pick this folder
+3. Open any page on `app.hubspot.com`
 
-## Storage Model
-
-- `chrome.storage.sync`:
-  - General settings (`popupSettings`)
-- `chrome.storage.local`:
-  - Email templates (`popupEmailTemplates`)
-  - WhatsApp templates (`popupWhatsappTemplates`)
-  - Note templates (`popupNoteTemplates`)
-
-## Template Tokens
-
-Templates support simple contact tokens:
-
-- `[name]`: first name when available
-- `[gender]`: gender/salutation value when available
-
-Notes:
-
-- `[gender]` is best-effort. It resolves only when that field is available in the current contact data/context.
-- The extension does not open a contact page just to resolve `[gender]`; if unavailable, it resolves to blank.
-
-## Notes
-
-- The extension uses HubSpot DOM automation heuristics. If HubSpot changes UI structure, automation selectors may need updates.
-- Email flow does not auto-send; it fills a draft only.
-- Notes flow is guarded to target note composer actions only and uses in-flight button locking to avoid duplicate submits.
-- HubSpot dark mode support uses the bundled Dark Reader engine (MIT licensed).
+HubSpot changes its UI now and then, so a feature can break until the extension catches up. Dark mode for HubSpot uses the bundled [Dark Reader](https://github.com/darkreader/darkreader) engine.
 
 ## License
 
-This project is licensed under the **GNU Affero General Public License v3.0 (AGPL-3.0)**.
-
-See [`LICENSE`](./LICENSE) for the full text.
+[AGPL-3.0](LICENSE)
