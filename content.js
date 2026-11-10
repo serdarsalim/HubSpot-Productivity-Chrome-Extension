@@ -50,6 +50,8 @@
   const SIDEBAR_DECLUTTER_BAR_ID = "cpSidebarDeclutterBar";
   const SIDEBAR_DECLUTTER_STYLE_ID = "cpSidebarDeclutterStyle";
   const SIDEBAR_HIDE_EMPTY_LOCAL_KEY = "popupSidebarHideEmpty";
+  const NAV_THEME_TOGGLE_ID = "cpNavThemeToggle";
+  const NAV_THEME_TOGGLE_STYLE_ID = "cpNavThemeToggleStyle";
   const COMPOSER_TEMPLATE_SEARCH_ROW_ID = "cpComposerTemplateSearchRow";
   const COMPOSER_NOTE_SEARCH_ROW_ID = "cpComposerNoteSearchRow";
   const COMPOSER_TEMPLATE_SEARCH_STYLE_ID = "cpComposerTemplateSearchStyle";
@@ -70,8 +72,12 @@
     return api;
   }
 
+  let hubSpotThemeMode = "light";
+
   function applyHubSpotThemeMode(themeMode) {
     const mode = normalizeThemeMode(themeMode);
+    hubSpotThemeMode = mode;
+    syncNavThemeToggle();
     const darkReader = getDarkReaderApi();
     if (!darkReader) return false;
 
@@ -85,6 +91,105 @@
 
     darkReader.disable();
     return true;
+  }
+
+  // --- Dark mode toggle in HubSpot's global toolbar ---
+  // Same setting the popup's theme button writes (popupSettings.themeMode),
+  // so both stay in sync through chrome.storage.onChanged.
+  const NAV_THEME_TOGGLE_ICONS = Object.freeze({
+    moon: "<svg viewBox='0 0 16 16' width='16' height='16' aria-hidden='true'><path fill='currentColor' d='M6.2 1.2a.6.6 0 0 1 .1.7A5.4 5.4 0 0 0 13.9 9a.6.6 0 0 1 .9.7A7 7 0 1 1 5.5 1a.6.6 0 0 1 .7.2Z'/></svg>",
+    sun: "<svg viewBox='0 0 16 16' width='16' height='16' aria-hidden='true'><circle cx='8' cy='8' r='3.2' fill='currentColor'/><path stroke='currentColor' stroke-width='1.5' stroke-linecap='round' d='M8 1v1.6M8 13.4V15M1 8h1.6M13.4 8H15M3 3l1.2 1.2M11.8 11.8 13 13M13 3l-1.2 1.2M4.2 11.8 3 13'/></svg>"
+  });
+
+  function syncNavThemeToggle() {
+    const button = document.querySelector(`#${NAV_THEME_TOGGLE_ID} button`);
+    if (!button) return;
+    const isDark = hubSpotThemeMode === "dark";
+    if (button.dataset.cpTheme === hubSpotThemeMode) return;
+    button.dataset.cpTheme = hubSpotThemeMode;
+    const label = isDark ? "Switch to light mode" : "Switch to dark mode";
+    button.setAttribute("aria-label", label);
+    button.setAttribute("title", label);
+    button.innerHTML = isDark ? NAV_THEME_TOGGLE_ICONS.sun : NAV_THEME_TOGGLE_ICONS.moon;
+  }
+
+  function toggleHubSpotThemeFromNav() {
+    const nextMode = hubSpotThemeMode === "dark" ? "light" : "dark";
+    applyHubSpotThemeMode(nextMode);
+    try {
+      chrome.storage.sync.get(SETTINGS_KEY, (result) => {
+        if (chrome.runtime.lastError) return;
+        const settings = result?.[SETTINGS_KEY];
+        const nextSettings = { ...(settings && typeof settings === "object" ? settings : {}), themeMode: nextMode };
+        chrome.storage.sync.set({ [SETTINGS_KEY]: nextSettings });
+      });
+    } catch (_error) {
+      // Ignore storage failures; the page itself already switched.
+    }
+  }
+
+  function ensureNavThemeToggle() {
+    const list = document.getElementById("hs-global-toolbar-icons");
+    if (!list) return;
+    const existing = document.getElementById(NAV_THEME_TOGGLE_ID);
+    if (existing && list.contains(existing)) return;
+    if (existing) existing.remove();
+
+    if (!document.getElementById(NAV_THEME_TOGGLE_STYLE_ID)) {
+      const style = document.createElement("style");
+      style.id = NAV_THEME_TOGGLE_STYLE_ID;
+      style.textContent = `
+        #${NAV_THEME_TOGGLE_ID} {
+          display: flex;
+          align-items: center;
+          margin: 0 5px;
+          list-style: none;
+        }
+        #${NAV_THEME_TOGGLE_ID} button {
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          width: 32px;
+          height: 32px;
+          padding: 8px;
+          border: 0;
+          border-radius: 999px;
+          background: transparent;
+          color: #ffffff;
+          cursor: pointer;
+        }
+        /* HubSpot sets a dark color on every svg, which currentColor inherits. */
+        #${NAV_THEME_TOGGLE_ID} svg {
+          display: block;
+          color: #ffffff;
+        }
+        #${NAV_THEME_TOGGLE_ID} button:hover,
+        #${NAV_THEME_TOGGLE_ID} button:focus-visible {
+          background: rgba(255, 255, 255, 0.14);
+          outline: none;
+        }
+      `;
+      document.head.appendChild(style);
+    }
+
+    const item = document.createElement("li");
+    item.id = NAV_THEME_TOGGLE_ID;
+    const button = document.createElement("button");
+    button.type = "button";
+    button.addEventListener("click", toggleHubSpotThemeFromNav);
+    item.appendChild(button);
+
+    // Sit just left of the notifications bell; fall back to the end of the row.
+    // The bell is wrapped (li inside a div), so anchor on whichever direct
+    // child of the row contains it.
+    const bell = document.getElementById("hs-global-toolbar-notifications-list-item");
+    const bellItem = bell ? Array.from(list.children).find((child) => child.contains(bell)) : null;
+    if (bellItem) {
+      list.insertBefore(item, bellItem);
+    } else {
+      list.appendChild(item);
+    }
+    syncNavThemeToggle();
   }
 
   function applyHubSpotThemeFromSettingsStorage() {
@@ -1297,6 +1402,10 @@
   // HubSpot's own test hooks (profile-properties-list / property-input-*),
   // which survive their CSS class churn.
   const SIDEBAR_EMPTY_VALUE_PATTERN = /^[-–—]{1,2}$/;
+  // HubSpot moved this hook from data-selenium-test to data-test-id in the
+  // 2026 record-page redesign; match both so either markup keeps working.
+  const SIDEBAR_PROPERTIES_LIST_SELECTOR =
+    "[data-test-id='profile-properties-list'], [data-selenium-test='profile-properties-list']";
 
   const sidebarDeclutterState = {
     enabled: true,
@@ -1506,12 +1615,12 @@
     // Cards fold back to a title-only shell when re-collapsed; a shell must
     // never stay hidden by a decision made against its old rows.
     for (const card of sidebar.querySelectorAll("[data-test-id^='card-wrapper-'].cp-sd-hidden")) {
-      if (!card.querySelector("[data-selenium-test='profile-properties-list']")) {
+      if (!card.querySelector(SIDEBAR_PROPERTIES_LIST_SELECTOR)) {
         card.classList.remove("cp-sd-hidden");
       }
     }
 
-    for (const list of sidebar.querySelectorAll("[data-selenium-test='profile-properties-list']")) {
+    for (const list of sidebar.querySelectorAll(SIDEBAR_PROPERTIES_LIST_SELECTOR)) {
       let visibleCount = 0;
       for (const row of Array.from(list.children)) {
         if (!(row instanceof Element)) continue;
@@ -2828,6 +2937,7 @@
       decorateActiveContactPhoneTextFlags();
       enhanceSidebarDeclutter();
       ensureComposerTemplateSearch();
+      ensureNavThemeToggle();
       const ms = performance.now() - start;
       if (ms > 4) console.log(`[ContactPoint] enhancers ran in ${ms.toFixed(1)}ms`);
       return;
@@ -2836,6 +2946,7 @@
     decorateActiveContactPhoneTextFlags();
     enhanceSidebarDeclutter();
     ensureComposerTemplateSearch();
+    ensureNavThemeToggle();
   }
 
   // Coalesce bursts of DOM mutations into a single run per animation frame.

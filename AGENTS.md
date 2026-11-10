@@ -278,11 +278,16 @@ Import/export format in Settings is strict and current-only:
 - email composer detection
 - subject/body field detection
 - sidebar declutter anchors: `[data-selenium-test='left-sidebar']`,
-  `[data-selenium-test='profile-properties-list']` (rows are its direct
-  children), `[data-selenium-test^='property-input-']` (value; `--` = empty),
+  `[data-test-id='profile-properties-list']` (rows are its direct
+  children; was `data-selenium-test` before the 2026 redesign, both matched), `[data-selenium-test^='property-input-']` (value; `--` = empty),
   `[data-test-id^='card-wrapper-']` cards with a
   `[role='button'][aria-expanded]` collapse toggle that contains
   `[data-selenium-test='crm-card-title']`
+
+- dark mode toggle in the top bar: `#hs-global-toolbar-icons` (the icon row),
+  inserted before the direct child holding
+  `#hs-global-toolbar-notifications-list-item`. Writes `themeMode` into
+  `popupSettings`, same as the popup's theme button
 
 When fixing, prefer scoped scoring heuristics over brittle class selectors.
 
