@@ -10,6 +10,7 @@
     });
   }
   if (dom.contactViewBtn) dom.contactViewBtn.addEventListener("click", App.openContactsView);
+  if (dom.templatesBtn) dom.templatesBtn.addEventListener("click", App.openTemplates);
   if (dom.emailSettingsBtn) dom.emailSettingsBtn.addEventListener("click", App.toggleEmailSettings);
   if (dom.whatsappSettingsBtn) dom.whatsappSettingsBtn.addEventListener("click", App.toggleWhatsappSettings);
   if (dom.noteSettingsBtn) dom.noteSettingsBtn.addEventListener("click", App.toggleNoteSettings);

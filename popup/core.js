@@ -59,6 +59,8 @@
     emailSettingsBtn: document.getElementById("emailSettingsBtn"),
     whatsappSettingsBtn: document.getElementById("whatsappSettingsBtn"),
     noteSettingsBtn: document.getElementById("noteSettingsBtn"),
+    templatesBtn: document.getElementById("templatesBtn"),
+    templateKindSwitch: document.getElementById("templateKindSwitch"),
     cancelSettingsBtn: document.getElementById("cancelSettingsBtn"),
     saveSettingsBtn: document.getElementById("saveSettingsBtn"),
     settingsPageEl: document.getElementById("settingsPage"),

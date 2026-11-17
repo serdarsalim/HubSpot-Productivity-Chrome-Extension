@@ -204,6 +204,90 @@
         border-left: 1px solid var(--line);
       }
 
+      /* Two section tabs (Templates, Settings) with icon + label side by side,
+         then Theme and Pop out as icon-only actions pushed to the right. */
+      .main-nav .nav-tab:not(.nav-util) {
+        flex: 0 0 auto;
+        flex-direction: row;
+        gap: 7px;
+        padding: 11px 16px 12px;
+        font-size: 13px;
+      }
+
+      .main-nav .nav-tab:not(.nav-util) svg {
+        width: 18px;
+        height: 18px;
+      }
+
+      .main-nav .nav-icon-btn {
+        flex: 0 0 auto;
+        min-width: 44px;
+        padding: 10px 12px;
+      }
+
+      .main-nav .nav-util-lead {
+        margin-left: auto;
+        border-left: 0;
+      }
+
+      /* Email / WhatsApp / Notes switch shown under the bar on template pages */
+      .template-kind-switch {
+        display: inline-flex;
+        align-self: flex-start;
+        width: fit-content;
+        gap: 2px;
+        margin: 10px 12px 2px;
+        padding: 3px;
+        border: 1px solid var(--line);
+        border-radius: 10px;
+        background: var(--nav-bg);
+      }
+
+      .template-kind-switch[hidden] {
+        display: none;
+      }
+
+      .template-kind-btn {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        padding: 6px 12px;
+        border: 0;
+        border-radius: 7px;
+        background: transparent;
+        color: var(--muted);
+        font: inherit;
+        font-size: 12px;
+        font-weight: 600;
+        cursor: pointer;
+      }
+
+      .template-kind-btn svg {
+        width: 15px;
+        height: 15px;
+        stroke: currentColor;
+      }
+
+      .template-kind-btn svg.brand-glyph {
+        stroke: none;
+        fill: currentColor;
+      }
+
+      .template-kind-btn:hover {
+        color: var(--nav-violet);
+      }
+
+      .template-kind-btn.active {
+        background: var(--card);
+        color: var(--nav-violet);
+        box-shadow: 0 1px 3px rgba(8, 30, 60, 0.12);
+      }
+
+      .template-kind-btn:focus-visible {
+        outline: 2px solid var(--nav-violet);
+        outline-offset: 1px;
+      }
+
       .nav-util.active::after {
         display: none;
       }
@@ -3262,27 +3346,14 @@
                 <path d="M16 4.13a3 3 0 0 1 0 5.74"></path>
               </svg>
             </button>
-            <button id="emailSettingsBtn" class="nav-tab" aria-label="Open email templates" title="Open email templates">
+            <button id="templatesBtn" class="nav-tab" aria-label="Open templates" title="Your email, WhatsApp and note templates">
               <svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                <rect x="3" y="5" width="18" height="14" rx="2"></rect>
-                <path d="M3 7l9 6 9-6"></path>
+                <rect x="4" y="3" width="13" height="16" rx="2"></rect>
+                <path d="M8 21h10a2 2 0 0 0 2-2V7"></path>
+                <path d="M8 8h5"></path>
+                <path d="M8 12h5"></path>
               </svg>
-              <span class="nav-label">Email</span>
-            </button>
-            <button id="whatsappSettingsBtn" class="nav-tab" aria-label="Open WhatsApp templates" title="Open WhatsApp templates">
-              <svg class="brand-glyph" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
-                <path d="M12.04 2C6.58 2 2.13 6.45 2.13 11.91c0 1.75.46 3.45 1.32 4.95L2 22l5.25-1.38a9.87 9.87 0 0 0 4.79 1.22h.01c5.46 0 9.91-4.45 9.91-9.91 0-2.65-1.03-5.14-2.9-7.01A9.82 9.82 0 0 0 12.04 2zm0 18.15h-.01a8.2 8.2 0 0 1-4.18-1.15l-.3-.18-3.11.82.83-3.04-.2-.31a8.2 8.2 0 0 1-1.26-4.36c0-4.54 3.7-8.23 8.24-8.23a8.2 8.2 0 0 1 8.23 8.24c0 4.54-3.7 8.25-8.23 8.25zm4.52-6.16c-.25-.12-1.47-.72-1.69-.81-.23-.08-.39-.12-.56.12-.17.25-.64.81-.79.98-.14.17-.29.19-.54.06-.25-.12-1.05-.39-1.99-1.23-.74-.66-1.24-1.47-1.38-1.72-.14-.25-.02-.38.11-.51.11-.11.25-.29.37-.43.12-.14.17-.25.25-.41.08-.17.04-.31-.02-.43-.06-.12-.56-1.35-.77-1.85-.2-.48-.41-.42-.56-.43l-.48-.01c-.17 0-.43.06-.66.31-.23.25-.86.85-.86 2.07 0 1.22.89 2.4 1.01 2.56.12.17 1.75 2.67 4.25 3.74.59.26 1.05.41 1.41.52.59.19 1.13.16 1.56.1.48-.07 1.47-.6 1.68-1.18.21-.58.21-1.07.14-1.18-.06-.11-.22-.17-.47-.29z"></path>
-              </svg>
-              <span class="nav-label">WhatsApp</span>
-            </button>
-            <button id="noteSettingsBtn" class="nav-tab" aria-label="Open note templates" title="Open note templates">
-              <svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                <path d="M4 3h12l4 4v14H4z"></path>
-                <path d="M16 3v4h4"></path>
-                <path d="M8 12h8"></path>
-                <path d="M8 16h8"></path>
-              </svg>
-              <span class="nav-label">Notes</span>
+              <span class="nav-label">Templates</span>
             </button>
             <button id="settingsBtn" class="nav-tab" aria-label="Open settings" title="Open settings">
               <svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
@@ -3291,7 +3362,7 @@
               </svg>
               <span class="nav-label">Settings</span>
             </button>
-            <button id="themeToggleBtn" class="nav-tab nav-util nav-util-lead theme-toggle-btn" aria-label="Switch to dark mode" title="Switch to dark mode">
+            <button id="themeToggleBtn" class="nav-tab nav-util nav-icon-btn nav-util-lead theme-toggle-btn" aria-label="Switch to dark mode" title="Switch to dark mode">
               <svg class="theme-icon theme-icon-moon" viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
                 <path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8"></path>
               </svg>
@@ -3299,17 +3370,39 @@
                 <circle cx="12" cy="12" r="4"></circle>
                 <path d="M12 2v2.2M12 19.8V22M4.2 12H2M22 12h-2.2M19.1 4.9l-1.6 1.6M6.5 17.5l-1.6 1.6M19.1 19.1l-1.6-1.6M6.5 6.5 4.9 4.9"></path>
               </svg>
-              <span class="nav-label">Theme</span>
-            </button>
-            <button id="popOutBtn" class="nav-tab nav-util popout-btn" aria-label="Pop out to a new window" title="Pop out to a new window">
+                          </button>
+            <button id="popOutBtn" class="nav-tab nav-util nav-icon-btn popout-btn" aria-label="Pop out to a new window" title="Pop out to a new window">
               <svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
                 <path d="M14 4h6v6"></path>
                 <path d="M10 14 20 4"></path>
                 <path d="M20 13v5a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h5"></path>
               </svg>
-              <span class="nav-label">Pop out</span>
-            </button>
+                          </button>
           </nav>
+          <div id="templateKindSwitch" class="template-kind-switch" role="group" aria-label="Template type" hidden>
+            <button id="emailSettingsBtn" class="template-kind-btn" aria-label="Open email templates" title="Open email templates">
+              <svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <rect x="3" y="5" width="18" height="14" rx="2"></rect>
+                <path d="M3 7l9 6 9-6"></path>
+              </svg>
+              <span class="nav-label">Email</span>
+            </button>
+            <button id="whatsappSettingsBtn" class="template-kind-btn" aria-label="Open WhatsApp templates" title="Open WhatsApp templates">
+              <svg class="brand-glyph" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+                <path d="M12.04 2C6.58 2 2.13 6.45 2.13 11.91c0 1.75.46 3.45 1.32 4.95L2 22l5.25-1.38a9.87 9.87 0 0 0 4.79 1.22h.01c5.46 0 9.91-4.45 9.91-9.91 0-2.65-1.03-5.14-2.9-7.01A9.82 9.82 0 0 0 12.04 2zm0 18.15h-.01a8.2 8.2 0 0 1-4.18-1.15l-.3-.18-3.11.82.83-3.04-.2-.31a8.2 8.2 0 0 1-1.26-4.36c0-4.54 3.7-8.23 8.24-8.23a8.2 8.2 0 0 1 8.23 8.24c0 4.54-3.7 8.25-8.23 8.25zm4.52-6.16c-.25-.12-1.47-.72-1.69-.81-.23-.08-.39-.12-.56.12-.17.25-.64.81-.79.98-.14.17-.29.19-.54.06-.25-.12-1.05-.39-1.99-1.23-.74-.66-1.24-1.47-1.38-1.72-.14-.25-.02-.38.11-.51.11-.11.25-.29.37-.43.12-.14.17-.25.25-.41.08-.17.04-.31-.02-.43-.06-.12-.56-1.35-.77-1.85-.2-.48-.41-.42-.56-.43l-.48-.01c-.17 0-.43.06-.66.31-.23.25-.86.85-.86 2.07 0 1.22.89 2.4 1.01 2.56.12.17 1.75 2.67 4.25 3.74.59.26 1.05.41 1.41.52.59.19 1.13.16 1.56.1.48-.07 1.47-.6 1.68-1.18.21-.58.21-1.07.14-1.18-.06-.11-.22-.17-.47-.29z"></path>
+              </svg>
+              <span class="nav-label">WhatsApp</span>
+            </button>
+            <button id="noteSettingsBtn" class="template-kind-btn" aria-label="Open note templates" title="Open note templates">
+              <svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <path d="M4 3h12l4 4v14H4z"></path>
+                <path d="M16 3v4h4"></path>
+                <path d="M8 12h8"></path>
+                <path d="M8 16h8"></path>
+              </svg>
+              <span class="nav-label">Notes</span>
+            </button>
+          </div>
         </div>
 
         <div id="status" class="status">

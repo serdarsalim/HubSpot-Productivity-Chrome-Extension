@@ -126,6 +126,10 @@
     return { email, whatsapp, note };
   }
 
+  // The Templates tab reopens whichever template type you used last
+  // (email by default); the switch under the bar changes type.
+  let lastTemplateKind = "email";
+
   function formatCloudSyncLabel(metaInput) {
     const lastFullSyncAt = String(metaInput?.lastFullSyncAt || "").trim();
     if (!lastFullSyncAt) return "never";
@@ -459,6 +463,19 @@
     if (dom.whatsappSettingsBtn) dom.whatsappSettingsBtn.classList.toggle("active", whatsappOpen);
     if (dom.noteSettingsBtn) dom.noteSettingsBtn.classList.toggle("active", noteOpen);
     if (dom.settingsBtn) dom.settingsBtn.classList.toggle("active", settingsOpen);
+    const anyTemplatesOpen = emailOpen || whatsappOpen || noteOpen;
+    if (dom.templatesBtn) dom.templatesBtn.classList.toggle("active", anyTemplatesOpen);
+    if (dom.templateKindSwitch) dom.templateKindSwitch.hidden = !anyTemplatesOpen;
+    [
+      [dom.emailSettingsBtn, emailOpen],
+      [dom.whatsappSettingsBtn, whatsappOpen],
+      [dom.noteSettingsBtn, noteOpen]
+    ].forEach(([button, open]) => {
+      if (button) button.setAttribute("aria-pressed", open ? "true" : "false");
+    });
+    if (emailOpen) lastTemplateKind = "email";
+    else if (whatsappOpen) lastTemplateKind = "whatsapp";
+    else if (noteOpen) lastTemplateKind = "note";
     if (dom.contactViewBtn) dom.contactViewBtn.classList.toggle("active", !activeTabOpen && !emailOpen && !whatsappOpen && !noteOpen && !settingsOpen);
     if (dom.mainPageEl) dom.mainPageEl.classList.toggle("header-only", activeTabOpen || emailOpen || whatsappOpen || noteOpen || settingsOpen);
     App.updateStickyHeadOffset();
@@ -1105,6 +1122,12 @@
       void App.flushWhatsappTemplateAutosave({ showToast: false });
     }
     setWhatsappTemplatesMode(false);
+  }
+
+  function openTemplates() {
+    if (lastTemplateKind === "whatsapp") openWhatsappSettings();
+    else if (lastTemplateKind === "note") openNoteSettings();
+    else openEmailSettings();
   }
 
   function toggleEmailSettings() {
@@ -2202,6 +2225,7 @@
     closeActiveTab,
     toggleActiveTab,
     openContactsView,
+    openTemplates,
     ensureCountryPrefixOptionExists,
     renderCountryPrefixOptions,
     buildSyncSettingsPayload,
