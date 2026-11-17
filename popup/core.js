@@ -133,6 +133,7 @@
     composerTemplateSearchEnabledInput: document.getElementById("composerTemplateSearchEnabledInput"),
     hubspotTemplatesEnabledInput: document.getElementById("hubspotTemplatesEnabledInput"),
     phoneFlagsExcludeField: document.getElementById("phoneFlagsExcludeField"),
+    hubspotTemplatesSubField: document.getElementById("hubspotTemplatesSubField"),
     phoneFlagsExcludeDropdown: document.getElementById("phoneFlagsExcludeDropdown"),
     phoneFlagsExcludeDropdownBtn: document.getElementById("phoneFlagsExcludeDropdownBtn"),
     phoneFlagsExcludeDropdownPanel: document.getElementById("phoneFlagsExcludeDropdownPanel"),

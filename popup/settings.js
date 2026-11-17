@@ -131,7 +131,18 @@
     if (!lastFullSyncAt) return "never";
     const date = new Date(lastFullSyncAt);
     if (Number.isNaN(date.getTime())) return "never";
-    return date.toLocaleString();
+    const time = date.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+    const today = new Date();
+    const yesterday = new Date(today);
+    yesterday.setDate(today.getDate() - 1);
+    if (date.toDateString() === today.toDateString()) return `today, ${time}`;
+    if (date.toDateString() === yesterday.toDateString()) return `yesterday, ${time}`;
+    return `${date.toLocaleDateString([], { day: "numeric", month: "short" })}, ${time}`;
+  }
+
+  function teamInitials(name) {
+    const words = String(name || "").trim().split(/\s+/).filter(Boolean);
+    return words.slice(0, 2).map((word) => word[0].toUpperCase()).join("") || "T";
   }
 
   function renderCloudConnectionStatus(customMessage = "") {
@@ -177,28 +188,21 @@
       const syncedAt = formatCloudSyncLabel(state.cloud.meta);
       const apiToken = String(auth.apiToken || "");
       return `
-        <div class="cloud-auth-card" data-cloud-auth-org-id="${App.escapeHtml(auth.organizationId)}">
-          <div class="cloud-auth-card-head">
+        <div class="cloud-auth-card team-card" data-cloud-auth-org-id="${App.escapeHtml(auth.organizationId)}">
+          <span class="team-card-avatar" aria-hidden="true">${App.escapeHtml(teamInitials(orgName))}</span>
+          <span class="team-card-copy">
             <strong>${App.escapeHtml(orgName)}</strong>
-            <div class="cloud-token-row">
-              <span class="cloud-sync-label" data-state="${isPaused ? "paused" : "synced"}">${isPaused ? "Hidden" : `Updated: ${App.escapeHtml(syncedAt)}`}</span>
-              <div class="cloud-actions">
-                <button class="btn cloud-refresh-btn" type="button" data-cloud-refresh-btn="true" data-cloud-auth-org-id="${App.escapeHtml(auth.organizationId)}" aria-label="Update templates" title="Update — download the latest templates from the cloud"><span class="cloud-refresh-icon" aria-hidden="true">↻</span><span class="cloud-btn-label">Update</span></button>
-                <button
-                  class="btn cloud-toggle-templates-btn"
-                  type="button"
-                  data-cloud-toggle-templates-btn="true"
-                  data-cloud-auth-org-id="${App.escapeHtml(auth.organizationId)}"
-                  aria-label="${isPaused ? "Show team templates" : "Hide team templates"}"
-                  title="${isPaused ? "Show — display this team's templates" : "Hide — stop showing this team's templates"}"
-                ><span class="cloud-toggle-icon" aria-hidden="true">${
-                  isPaused
-                    ? '<svg viewBox="0 0 16 16" focusable="false"><path d="M1 8s2.6-4.5 7-4.5 7 4.5 7 4.5-2.6 4.5-7 4.5S1 8 1 8z"></path><circle cx="8" cy="8" r="2"></circle></svg>'
-                    : '<svg viewBox="0 0 16 16" focusable="false"><path d="M6.3 4.2A6.9 6.9 0 0 1 8 4c4.4 0 7 4 7 4a12.6 12.6 0 0 1-2 2.4M3.4 5.5A12.6 12.6 0 0 0 1 8s2.6 4.5 7 4.5a6.9 6.9 0 0 0 2.3-.4"></path><path d="M6.7 6.7a2 2 0 0 0 2.6 2.6"></path><path d="M2 2l12 12"></path></svg>'
-                }</span><span class="cloud-btn-label">${isPaused ? "Show" : "Hide"}</span></button>
-                <button class="btn cloud-remove-btn" type="button" data-cloud-remove-btn="true" data-cloud-auth-org-id="${App.escapeHtml(auth.organizationId)}" aria-label="Remove org key" title="Remove — disconnect this org key"><span class="cloud-remove-icon" aria-hidden="true">✕</span><span class="cloud-btn-label">Remove</span></button>
+            <span class="cloud-sync-label" data-state="${isPaused ? "paused" : "synced"}">${isPaused ? "Hidden from your template lists" : `Synced ${App.escapeHtml(syncedAt)}`}</span>
+          </span>
+          <div class="cloud-actions">
+            <button class="btn team-icon-btn cloud-refresh-btn" type="button" data-cloud-refresh-btn="true" data-cloud-auth-org-id="${App.escapeHtml(auth.organizationId)}" aria-label="Sync now" title="Sync now: download the latest team templates"><span class="cloud-refresh-icon" aria-hidden="true">↻</span></button>
+            <details class="team-more">
+              <summary class="btn team-icon-btn" aria-label="More team actions" title="More">⋯</summary>
+              <div class="team-more-menu">
+                <button type="button" data-cloud-toggle-templates-btn="true" data-cloud-auth-org-id="${App.escapeHtml(auth.organizationId)}">${isPaused ? "Show this team's templates" : "Hide this team's templates"}</button>
+                <button type="button" class="team-more-danger" data-cloud-remove-btn="true" data-cloud-auth-org-id="${App.escapeHtml(auth.organizationId)}">Leave team</button>
               </div>
-            </div>
+            </details>
           </div>
         </div>
       `;
@@ -542,6 +546,7 @@
     }
     if (dom.composerTemplateSearchEnabledInput) {
       dom.composerTemplateSearchEnabledInput.addEventListener("change", () => {
+        syncHubspotTemplatesSubFieldVisibility();
         queueSettingsAutosave({ immediate: true });
       });
     }
@@ -776,6 +781,14 @@
     return `<img class='${className}' src='vendor/flags/${App.escapeHtml(iso)}.svg' alt='' aria-hidden='true' />`;
   }
 
+  // The HubSpot-templates option only works through the composer search bar,
+  // so it hides while the bar is off (its saved value is kept).
+  function syncHubspotTemplatesSubFieldVisibility() {
+    if (!dom.hubspotTemplatesSubField) return;
+    const enabled = dom.composerTemplateSearchEnabledInput ? dom.composerTemplateSearchEnabledInput.checked : true;
+    dom.hubspotTemplatesSubField.hidden = !enabled;
+  }
+
   function syncPhoneFlagsExcludeFieldVisibility() {
     if (!dom.phoneFlagsExcludeField) return;
     const enabled = dom.phoneFlagsEnabledInput ? dom.phoneFlagsEnabledInput.checked : true;
@@ -962,6 +975,7 @@
       dom.hubspotTemplatesEnabledInput.checked = state.settings.hubspotTemplatesEnabled !== false;
     }
     syncPhoneFlagsExcludeFieldVisibility();
+    syncHubspotTemplatesSubFieldVisibility();
     renderPhoneFlagsExcludedChips();
     bindPhoneFlagsExcludeControls();
     if (dom.openContactsInBackgroundInput) {
@@ -1597,7 +1611,7 @@
     if (removeBtn instanceof HTMLElement) {
       const orgId = String(removeBtn.getAttribute("data-cloud-auth-org-id") || "").trim();
       if (!orgId) return;
-      const confirmed = window.confirm("Remove this org key connection?");
+      const confirmed = window.confirm("Leave this team? Its shared templates disappear from Contact Point until you add the key again.");
       if (!confirmed) return;
       await clearCloudConnection({ organizationId: orgId, statusMessage: "Team access key removed." });
       renderCloudAuthCards();

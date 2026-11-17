@@ -21,6 +21,15 @@
     });
     dom.cloudAuthCardsEl.addEventListener("input", App.onCloudAuthCardsInput);
   }
+  // Close an open team "more" menu on any click outside it, or after one of
+  // its actions runs.
+  document.addEventListener("click", (event) => {
+    const target = event.target instanceof Element ? event.target : null;
+    document.querySelectorAll("details.team-more[open]").forEach((menu) => {
+      const insideSummary = target && menu.querySelector("summary")?.contains(target);
+      if (!insideSummary) menu.removeAttribute("open");
+    });
+  });
   if (dom.cloudTokenInfoBtn) dom.cloudTokenInfoBtn.addEventListener("click", App.openCloudTokenInfoDialog);
   if (dom.contactWidgetInfoBtn) {
     dom.contactWidgetInfoBtn.addEventListener("click", (event) => {

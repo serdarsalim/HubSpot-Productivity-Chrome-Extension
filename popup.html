@@ -1470,11 +1470,12 @@
       }
 
       .settings-section-title {
-        margin: 0 0 10px;
-        font-size: 16px;
+        margin: 0 0 4px;
+        font-size: 12px;
         font-weight: 700;
-        color: var(--text);
-        letter-spacing: 0.01em;
+        color: var(--muted);
+        letter-spacing: 0.04em;
+        text-transform: uppercase;
       }
 
       .field label {
@@ -1499,6 +1500,45 @@
         /* Match the country-code control width (210px label + 12px gap + 320px)
            so switches line up with it instead of floating to the far edge. */
         max-width: 542px;
+      }
+
+      /* Settings rows: copy on the left, control on the right, grouped by
+         where the setting takes effect. Sub-options sit indented under the
+         toggle they depend on and hide when it is off. */
+      .setting-row {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) auto;
+        align-items: center;
+        column-gap: 16px;
+        max-width: 560px;
+        padding: 6px 0;
+      }
+
+      .setting-row .setting-row-control {
+        width: 220px;
+      }
+
+      .setting-sub {
+        margin-left: 4px;
+        padding-left: 14px;
+        border-left: 2px solid var(--line);
+        max-width: 542px;
+      }
+
+      .setting-sub[hidden] {
+        display: none;
+      }
+
+      .setting-sub .setting-row {
+        max-width: 542px;
+      }
+
+      .setting-toggle-title.setting-sub-title {
+        font-weight: 500;
+      }
+
+      .setting-sub .phone-flags-excluded-chips {
+        margin: 2px 0 6px;
       }
 
       .setting-toggle-copy {
@@ -1627,6 +1667,119 @@
 
       .cloud-auth-card.pending {
         background: var(--panel);
+      }
+
+      /* Connected team row: initials, name + sync status, sync button and a
+         small menu for the rarer Hide / Leave actions. */
+      .cloud-auth-card.team-card {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        max-width: 560px;
+        padding: 10px 12px;
+        border: 1px solid var(--line);
+      }
+
+      .team-card-avatar {
+        flex: 0 0 32px;
+        height: 32px;
+        border-radius: 50%;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 12px;
+        font-weight: 700;
+        background: rgba(124, 58, 237, 0.12);
+        color: var(--nav-violet);
+      }
+
+      .team-card-copy {
+        display: flex;
+        flex-direction: column;
+        min-width: 0;
+        flex: 1 1 auto;
+      }
+
+      .team-card-copy strong {
+        font-size: 13px;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+
+      .team-card .cloud-actions {
+        gap: 2px;
+      }
+
+      .team-card .team-icon-btn {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 32px;
+        min-width: 32px;
+        height: 32px;
+        padding: 0;
+        border: 0;
+        border-radius: 8px;
+        background: transparent;
+        box-shadow: none;
+        color: var(--muted);
+        font-size: 16px;
+        cursor: pointer;
+        list-style: none;
+      }
+
+      .team-card .team-icon-btn::-webkit-details-marker {
+        display: none;
+      }
+
+      .team-card .team-icon-btn:hover,
+      .team-more[open] > .team-icon-btn {
+        background: rgba(124, 58, 237, 0.1);
+        color: var(--nav-violet);
+      }
+
+      .team-more {
+        position: relative;
+      }
+
+      .team-more-menu {
+        position: absolute;
+        right: 0;
+        top: calc(100% + 4px);
+        z-index: 30;
+        min-width: 210px;
+        padding: 4px;
+        border: 1px solid var(--line);
+        border-radius: 10px;
+        background: var(--card);
+        box-shadow: 0 12px 24px rgba(8, 30, 60, 0.16);
+      }
+
+      .team-more-menu button {
+        display: block;
+        width: 100%;
+        padding: 8px 10px;
+        border: 0;
+        border-radius: 6px;
+        background: transparent;
+        color: var(--text);
+        font: inherit;
+        font-size: 13px;
+        text-align: left;
+        cursor: pointer;
+      }
+
+      .team-more-menu button:hover {
+        background: rgba(124, 58, 237, 0.08);
+      }
+
+      .team-more-menu .team-more-danger {
+        color: #c0392b;
+      }
+
+      body[data-theme="dark"] .team-more-menu .team-more-danger {
+        color: #f08a7e;
       }
 
       .cloud-auth-card-head {
@@ -2102,6 +2255,10 @@
 
         .settings-country-field {
           grid-template-columns: 1fr;
+        }
+
+        .setting-row .setting-row-control {
+          width: 170px;
         }
 
         .settings-country-field label {
@@ -3052,7 +3209,11 @@
       }
 
       body[data-theme="dark"] .settings-section-title {
-        color: #d8e6f8;
+        color: #93abc4;
+      }
+
+      body[data-theme="dark"] .setting-sub {
+        border-left-color: #2b3f57;
       }
 
       body[data-theme="dark"] .setting-toggle-title {
@@ -3334,140 +3495,134 @@
     <section id="settingsPage" class="settings-page" hidden>
       <div class="settings-card">
         <section class="settings-section">
-          <h3 class="settings-section-title">General</h3>
-          <div class="field settings-country-field">
-            <span class="settings-country-label">
-              <label for="countryPrefixInput">Default country code</label>
-              <button
-                id="countryCodeInfoBtn"
-                type="button"
-                class="cloud-token-info-btn"
-                aria-label="What is the default country code?"
-              >i</button>
-            </span>
-            <div id="countryPrefixDropdown" class="country-prefix-dropdown">
-              <button id="countryPrefixDropdownBtn" type="button" class="country-prefix-dropdown-btn">
-                Not set
-              </button>
-              <div id="countryPrefixDropdownPanel" class="country-prefix-dropdown-panel">
-                <input
-                  id="countryPrefixDropdownSearch"
-                  class="country-prefix-dropdown-search"
-                  type="text"
-                  placeholder="Search country or code..."
-                  autocomplete="off"
-                />
-                <div id="countryPrefixDropdownList" class="country-prefix-dropdown-list"></div>
+          <h3 class="settings-section-title">Phone numbers</h3>
+          <div class="settings-toggle-grid">
+            <div class="setting-row">
+              <span class="setting-toggle-copy">
+                <label class="setting-toggle-title" for="countryPrefixDropdownBtn">Default country code</label>
+                <span class="setting-toggle-desc">Added to numbers saved without a + code, so WhatsApp dials the right country.</span>
+              </span>
+              <div id="countryPrefixDropdown" class="country-prefix-dropdown setting-row-control">
+                <button id="countryPrefixDropdownBtn" type="button" class="country-prefix-dropdown-btn">
+                  Not set
+                </button>
+                <div id="countryPrefixDropdownPanel" class="country-prefix-dropdown-panel">
+                  <input
+                    id="countryPrefixDropdownSearch"
+                    class="country-prefix-dropdown-search"
+                    type="text"
+                    placeholder="Search country or code..."
+                    autocomplete="off"
+                  />
+                  <div id="countryPrefixDropdownList" class="country-prefix-dropdown-list"></div>
+                </div>
               </div>
+              <select id="countryPrefixInput" class="settings-country-native-select"></select>
             </div>
-            <select id="countryPrefixInput" class="settings-country-native-select"></select>
-          </div>
-
-          <div class="field">
-            <div class="settings-toggle-grid">
-              <div class="setting-toggle-card">
+            <div class="setting-row">
+              <span class="setting-toggle-copy">
+                <span class="setting-toggle-title">Show country flags</span>
+                <span class="setting-toggle-desc">A flag next to each number in HubSpot. Hover it for the country name.</span>
+              </span>
+              <label class="ios-switch">
+                <input id="phoneFlagsEnabledInput" type="checkbox" role="switch" aria-label="Show country flags next to phone numbers" />
+                <span class="ios-switch-track" aria-hidden="true"></span>
+              </label>
+            </div>
+            <div id="phoneFlagsExcludeField" class="setting-sub" hidden>
+              <div class="setting-row">
                 <span class="setting-toggle-copy">
-                  <span class="setting-toggle-title">Composer template search</span>
-                  <span class="setting-toggle-desc">Search and apply your templates from a bar inside HubSpot's email composer.</span>
+                  <label class="setting-toggle-title setting-sub-title" for="phoneFlagsExcludeDropdownBtn">Skip flags for</label>
+                  <span class="setting-toggle-desc">Useful for your home country, where every number has the same flag.</span>
                 </span>
-                <label class="ios-switch">
-                  <input id="composerTemplateSearchEnabledInput" type="checkbox" role="switch" aria-label="Show the template search bar inside the HubSpot email composer" />
-                  <span class="ios-switch-track" aria-hidden="true"></span>
-                </label>
+                <div id="phoneFlagsExcludeDropdown" class="country-prefix-dropdown setting-row-control">
+                  <button id="phoneFlagsExcludeDropdownBtn" type="button" class="country-prefix-dropdown-btn">
+                    Add a country
+                  </button>
+                  <div id="phoneFlagsExcludeDropdownPanel" class="country-prefix-dropdown-panel">
+                    <input
+                      id="phoneFlagsExcludeDropdownSearch"
+                      class="country-prefix-dropdown-search"
+                      type="text"
+                      placeholder="Search country..."
+                      autocomplete="off"
+                    />
+                    <div id="phoneFlagsExcludeDropdownList" class="country-prefix-dropdown-list"></div>
+                  </div>
+                </div>
               </div>
-              <div class="setting-toggle-card">
+              <div id="phoneFlagsExcludedChips" class="phone-flags-excluded-chips" hidden></div>
+            </div>
+          </div>
+        </section>
+
+        <section class="settings-section">
+          <h3 class="settings-section-title">Email composer</h3>
+          <div class="settings-toggle-grid">
+            <div class="setting-row">
+              <span class="setting-toggle-copy">
+                <span class="setting-toggle-title">Template search bar</span>
+                <span class="setting-toggle-desc">Find and insert your templates from a bar inside HubSpot's email composer.</span>
+              </span>
+              <label class="ios-switch">
+                <input id="composerTemplateSearchEnabledInput" type="checkbox" role="switch" aria-label="Show the template search bar inside the HubSpot email composer" />
+                <span class="ios-switch-track" aria-hidden="true"></span>
+              </label>
+            </div>
+            <div id="hubspotTemplatesSubField" class="setting-sub">
+              <div class="setting-row">
                 <span class="setting-toggle-copy">
-                  <span class="setting-toggle-title">HubSpot email templates</span>
-                  <span class="setting-toggle-desc">Also search your HubSpot template library from the composer bar, alongside your Contact Point templates.</span>
+                  <span class="setting-toggle-title setting-sub-title">Include HubSpot templates</span>
+                  <span class="setting-toggle-desc">Search your HubSpot template library from the same bar.</span>
                 </span>
                 <label class="ios-switch">
                   <input id="hubspotTemplatesEnabledInput" type="checkbox" role="switch" aria-label="Search HubSpot email templates from the composer bar" />
                   <span class="ios-switch-track" aria-hidden="true"></span>
                 </label>
               </div>
-              <div class="setting-toggle-card">
-                <span class="setting-toggle-copy">
-                  <span class="setting-toggle-title">
-                    Open contacts in the background
-                    <button
-                      id="backgroundTabInfoBtn"
-                      type="button"
-                      class="cloud-token-info-btn"
-                      aria-label="What does opening contacts in the background do?"
-                    >i</button>
-                  </span>
-                </span>
-                <label class="ios-switch">
-                  <input id="openContactsInBackgroundInput" type="checkbox" role="switch" aria-label="Open contacts in a background tab" />
-                  <span class="ios-switch-track" aria-hidden="true"></span>
-                </label>
-              </div>
-              <div class="setting-toggle-card">
-                <span class="setting-toggle-copy">
-                  <span class="setting-toggle-title">Phone country flags</span>
-                  <span class="setting-toggle-desc">Show each number's country flag in HubSpot. Hover the flag for the country name.</span>
-                </span>
-                <label class="ios-switch">
-                  <input id="phoneFlagsEnabledInput" type="checkbox" role="switch" aria-label="Show country flags next to phone numbers" />
-                  <span class="ios-switch-track" aria-hidden="true"></span>
-                </label>
-              </div>
-              <div class="setting-toggle-card">
-                <span class="setting-toggle-copy">
-                  <span class="setting-toggle-title">Sidebar property filter</span>
-                  <span class="setting-toggle-desc">Add a filter box and a Hide empty toggle above the properties on HubSpot record pages.</span>
-                </span>
-                <label class="ios-switch">
-                  <input id="sidebarDeclutterEnabledInput" type="checkbox" role="switch" aria-label="Show the sidebar property filter on HubSpot record pages" />
-                  <span class="ios-switch-track" aria-hidden="true"></span>
-                </label>
-              </div>
-              <div class="setting-toggle-card">
-                <span class="setting-toggle-copy">
-                  <span class="setting-toggle-title">
-                    Contact page widget
-                    <button
-                      id="contactWidgetInfoBtn"
-                      type="button"
-                      class="cloud-token-info-btn"
-                      aria-label="What is the contact page widget?"
-                    >i</button>
-                  </span>
-                </span>
-                <label class="ios-switch">
-                  <input id="inlineQuickActionsEnabledInput" type="checkbox" role="switch" aria-label="Enable HubSpot contact page widget" />
-                  <span class="ios-switch-track" aria-hidden="true"></span>
-                </label>
-              </div>
             </div>
           </div>
+        </section>
 
-          <div id="phoneFlagsExcludeField" class="field settings-country-field" hidden>
-            <span class="settings-country-label">
-              <label for="phoneFlagsExcludeDropdownBtn">Don't show flags for</label>
-            </span>
-            <div id="phoneFlagsExcludeDropdown" class="country-prefix-dropdown">
-              <button id="phoneFlagsExcludeDropdownBtn" type="button" class="country-prefix-dropdown-btn">
-                Add a country
-              </button>
-              <div id="phoneFlagsExcludeDropdownPanel" class="country-prefix-dropdown-panel">
-                <input
-                  id="phoneFlagsExcludeDropdownSearch"
-                  class="country-prefix-dropdown-search"
-                  type="text"
-                  placeholder="Search country..."
-                  autocomplete="off"
-                />
-                <div id="phoneFlagsExcludeDropdownList" class="country-prefix-dropdown-list"></div>
-              </div>
+        <section class="settings-section">
+          <h3 class="settings-section-title">Contact pages</h3>
+          <div class="settings-toggle-grid">
+            <div class="setting-row">
+              <span class="setting-toggle-copy">
+                <span class="setting-toggle-title">Property filter</span>
+                <span class="setting-toggle-desc">A search box and a Hide empty switch above the properties in the sidebar.</span>
+              </span>
+              <label class="ios-switch">
+                <input id="sidebarDeclutterEnabledInput" type="checkbox" role="switch" aria-label="Show the sidebar property filter on HubSpot record pages" />
+                <span class="ios-switch-track" aria-hidden="true"></span>
+              </label>
             </div>
-            <div id="phoneFlagsExcludedChips" class="phone-flags-excluded-chips" hidden></div>
+            <div class="setting-row">
+              <span class="setting-toggle-copy">
+                <span class="setting-toggle-title">Quick actions panel</span>
+                <span class="setting-toggle-desc">Email, WhatsApp and Notes buttons with your templates, right on the contact page.</span>
+              </span>
+              <label class="ios-switch">
+                <input id="inlineQuickActionsEnabledInput" type="checkbox" role="switch" aria-label="Enable HubSpot contact page widget" />
+                <span class="ios-switch-track" aria-hidden="true"></span>
+              </label>
+            </div>
+            <div class="setting-row">
+              <span class="setting-toggle-copy">
+                <span class="setting-toggle-title">Open contacts in the background</span>
+                <span class="setting-toggle-desc">New contact tabs open behind your current page, so you keep your place in a list.</span>
+              </span>
+              <label class="ios-switch">
+                <input id="openContactsInBackgroundInput" type="checkbox" role="switch" aria-label="Open contacts in a background tab" />
+                <span class="ios-switch-track" aria-hidden="true"></span>
+              </label>
+            </div>
           </div>
         </section>
 
         <section class="settings-section">
           <div class="cloud-token-label-row">
-            <h3 class="settings-section-title">Team access keys</h3>
+            <h3 class="settings-section-title">Team templates</h3>
             <button
               id="cloudTokenInfoBtn"
               class="cloud-token-info-btn"
@@ -3502,8 +3657,8 @@
           <h3 class="settings-section-title">Templates backup</h3>
           <div class="field">
             <div class="template-data-actions">
-              <button id="exportTemplatesBtn" class="btn" type="button">Export Local Templates</button>
-              <button id="importTemplatesBtn" class="btn" type="button">Import Local Templates</button>
+              <button id="exportTemplatesBtn" class="btn" type="button">Export templates</button>
+              <button id="importTemplatesBtn" class="btn" type="button">Import templates</button>
             </div>
             <input id="importTemplatesInput" type="file" accept="application/json,.json" hidden />
           </div>
@@ -3634,7 +3789,7 @@
     <div id="templateImportOverlay" class="template-import-overlay">
       <div class="template-import-card">
         <div class="settings-head">
-          <h2>Import Local Templates</h2>
+          <h2>Import templates</h2>
         </div>
         <p id="templateImportSummary" class="template-import-summary"></p>
         <div class="template-import-mode-row">
