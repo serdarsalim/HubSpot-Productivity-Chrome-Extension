@@ -1,0 +1,29 @@
+Send WhatsApp messages and emails from HubSpot contacts in two clicks, using templates your whole team shares.
+
+Open a contact, pick a template, and Contact Point fills in the contact's name and your details. WhatsApp opens with the message ready to send. Email templates drop straight into HubSpot's own composer, subject and body included. You never send anything automatically, you always review first.
+
+WHATSAPP FROM HUBSPOT
+- One click from any contact opens WhatsApp Web with your message written
+- A WhatsApp icon and a country flag next to every phone number
+- Set a default country code and numbers saved without one still dial correctly
+
+EMAIL TEMPLATES IN THE COMPOSER
+- A search bar inside HubSpot's email composer finds your templates as you type
+- Search your HubSpot template library from the same bar
+- Subject and body fill in with the contact's details
+
+TEMPLATES FOR THE WHOLE TEAM
+- Share email, WhatsApp and note templates across your team
+- Everyone sends the same, up-to-date wording
+- Note templates for calls and meetings
+
+A CLEANER CONTACT PAGE
+- Filter the property sidebar by name and hide empty properties
+- Email, WhatsApp and Notes buttons right on the contact page
+- Dark mode for HubSpot and the extension
+
+Template variables: [first_name], [name], [fullname], [email], [phone], [owner], [gender]
+
+Contact Point is independent of HubSpot, Inc. and is not affiliated with or endorsed by HubSpot.
+
+Questions or feature requests: serdarsalim.com
