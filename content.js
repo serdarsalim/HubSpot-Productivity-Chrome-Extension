@@ -247,14 +247,14 @@
           const { email, note } = composerTemplateSearchState.kinds;
           if (templatesDataChanged && (email.dialog || note.dialog || waTemplatePopoverState.open)) {
             void refreshContactTemplateData().then(() => {
-              void refreshComposerEmailFavorites();
-              renderComposerTemplateDropdown("note");
+              void refreshComposerFavorites("email");
+              void refreshComposerFavorites("note");
               if (waTemplatePopoverState.open) renderWaTemplatePopoverList();
             });
           }
 
-          const picker = composerTemplateSearchState.kinds.email.picker;
-          if (picker) {
+          for (const [kind, { picker }] of Object.entries(composerTemplateSearchState.kinds)) {
+            if (!picker) continue;
             let favoritesChanged = false;
             for (const key of changedKeys) {
               if (!picker.favorites.has(key)) continue;
@@ -264,7 +264,7 @@
               picker.favorites.set(key, starred);
               favoritesChanged = true;
             }
-            if (favoritesChanged) renderComposerTemplateDropdown("email");
+            if (favoritesChanged) renderComposerTemplateDropdown(kind);
           }
         }
       });
@@ -1853,6 +1853,7 @@
         visibleTemplateIds: [],
         busy: false,
         dialog: null,
+        picker: null,
         outsideClickHandler: null
       }
     }
@@ -1929,7 +1930,7 @@
         if (hubspotTemplateState.inFlight !== request) return;
         hubspotTemplateState.fetchedAt = Date.now();
         hubspotTemplateState.inFlight = null;
-        void refreshComposerEmailFavorites();
+        void refreshComposerFavorites("email");
       });
     hubspotTemplateState.inFlight = request;
   }
@@ -2118,7 +2119,7 @@
   const COMPOSER_SEARCH_KINDS = {
     email: {
       rowId: COMPOSER_TEMPLATE_SEARCH_ROW_ID,
-      placeholder: "Search Contact Point email templates...",
+      placeholder: "Search email templates...",
       emptyText: "No email templates yet. Create them from the Contact Point popup.",
       findDialog: () => {
         // The task composer contains "Send reminder", which scores high
@@ -2145,14 +2146,14 @@
     },
     note: {
       rowId: COMPOSER_NOTE_SEARCH_ROW_ID,
-      placeholder: "Search Contact Point note templates...",
+      placeholder: "Search note templates...",
       emptyText: "No note templates yet. Create them from the Contact Point popup.",
       findDialog: () => {
-        const editor = findNoteEditor();
+        const editor = findNoteEditor(document, composerTemplateSearchState.kinds.email.dialog);
         return editor ? getNoteComposerRoot(editor) : null;
       },
       getTemplates: () => contactTemplateState.templates?.note || [],
-      apply: (template) => applyInlineNoteTemplate(template)
+      apply: applyInlineNoteTemplate
     }
   };
 
@@ -2249,25 +2250,6 @@
 
       .cp-cts-dropdown.cp-cts-open {
         display: block;
-      }
-
-      .cp-cts-badge {
-        flex: 0 0 auto;
-        padding: 0 5px;
-        border-radius: 3px;
-        border: 1px solid transparent;
-        font-size: 8.5px;
-        font-weight: 600;
-        line-height: 14px;
-        letter-spacing: 0.03em;
-        text-transform: uppercase;
-        white-space: nowrap;
-      }
-
-      .cp-cts-badge-cp {
-        background: #eef4fb;
-        border-color: #d8e6f8;
-        color: #0b66c3;
       }
 
       .cp-cts-section {
@@ -2395,15 +2377,11 @@
 
       .cp-cts-sidebar[hidden],
       .cp-cts-row[hidden],
-      .cp-cts-launcher[hidden],
       .cp-cts-status:empty {
         display: none;
       }
 
       .cp-cts-sidebar-header {
-        display: flex;
-        align-items: center;
-        justify-content: space-between;
         padding: 15px 16px 12px;
       }
 
@@ -2474,8 +2452,7 @@
         min-height: 36px;
       }
 
-      .cp-cts-star,
-      .cp-cts-collapse {
+      .cp-cts-star {
         display: grid;
         flex: 0 0 32px;
         place-items: center;
@@ -2489,8 +2466,7 @@
         cursor: pointer;
       }
 
-      .cp-cts-star svg,
-      .cp-cts-collapse svg {
+      .cp-cts-star svg {
         width: 16px;
         height: 16px;
         stroke: currentColor;
@@ -2509,19 +2485,8 @@
         fill: #ffcb65;
       }
 
-      .cp-cts-star:hover,
-      .cp-cts-collapse:hover {
+      .cp-cts-star:hover {
         background: #f0f3f8;
-      }
-
-      .cp-cts-launcher {
-        padding: 3px 8px;
-        border: 1px solid #b9c8d9;
-        border-radius: 6px;
-        background: #ffffff;
-        color: #33475b;
-        font-size: 12px;
-        cursor: pointer;
       }
 
       /* WhatsApp template popover, anchored to the inline phone button. */
@@ -2581,17 +2546,20 @@
     return templates.filter((template) => searchTextMatchesQuery(template?.name || "", query));
   }
 
-  function composerEmailFavoriteKey(template) {
-    const portalId = composerTemplateSearchState.kinds.email.picker?.portalId;
+  function composerFavoriteKey(kindKey, template) {
+    const portalId = composerTemplateSearchState.kinds[kindKey].picker?.portalId;
+    const prefix = kindKey === "email" ? "cpEmailFavorite" : "cpNoteFavorite";
     return portalId
-      ? `cpEmailFavorite::${portalId}::${template.source || "local"}::${template.id}`
+      ? `${prefix}::${portalId}::${template.source || "local"}::${template.id}`
       : "";
   }
 
-  async function refreshComposerEmailFavorites() {
-    const picker = composerTemplateSearchState.kinds.email.picker;
+  async function refreshComposerFavorites(kindKey) {
+    const kindState = composerTemplateSearchState.kinds[kindKey];
+    const picker = kindState.picker;
     if (!picker) return;
-    const keys = COMPOSER_SEARCH_KINDS.email.getTemplates().map(composerEmailFavoriteKey)
+    positionComposerSidebar(kindKey);
+    const keys = COMPOSER_SEARCH_KINDS[kindKey].getTemplates().map((template) => composerFavoriteKey(kindKey, template))
       .filter((key) => key && !picker.favorites.has(key));
     if (keys.length) {
       for (const key of keys) picker.favorites.set(key, false);
@@ -2600,17 +2568,16 @@
         if (!picker.favoriteUpdates.has(key)) picker.favorites.set(key, stored[key] === true);
       }
     }
-    if (composerTemplateSearchState.kinds.email.picker === picker) renderComposerTemplateDropdown("email");
+    if (kindState.picker === picker) renderComposerTemplateDropdown(kindKey);
   }
 
   function renderComposerTemplateDropdown(kindKey) {
     const kindState = composerTemplateSearchState.kinds[kindKey];
-    const row = document.getElementById(COMPOSER_SEARCH_KINDS[kindKey].rowId);
     const picker = kindState.picker;
-    const dropdown = picker?.dropdown || row?.querySelector(".cp-cts-dropdown");
-    if (!dropdown) return;
+    if (!picker) return;
+    const { dropdown } = picker;
 
-    const open = picker?.docked || kindState.open;
+    const open = picker.docked || kindState.open;
     dropdown.classList.toggle("cp-cts-open", open);
     if (!open) return;
 
@@ -2636,7 +2603,7 @@
     }
 
     const sourceOf = (template) => String(template?.source || "").toLowerCase();
-    const isStarred = (template) => picker?.favorites.get(composerEmailFavoriteKey(template)) === true;
+    const isStarred = (template) => picker.favorites.get(composerFavoriteKey(kindKey, template)) === true;
     const starred = visible.filter(isStarred);
     const remaining = visible.filter((template) => !isStarred(template));
     const cloud = remaining.filter((template) => sourceOf(template) === "cloud");
@@ -2651,9 +2618,8 @@
       const isActive = index === kindState.activeIndex;
       const isHubSpot = sourceOf(template) === "hubspot";
       const sourceLabel = isHubSpot ? "HubSpot" : "Contact Point";
-      const sourceIcon = picker
-        ? `<img class='cp-cts-source-icon' src='${escapeHtml(isHubSpot ? picker.hubSpotIconUrl : picker.contactPointIconUrl)}' alt='${sourceLabel}' title='${sourceLabel}' width='16' height='16'>`
-        : "";
+      const iconUrl = isHubSpot ? picker.hubSpotIconUrl : picker.contactPointIconUrl;
+      const sourceIcon = `<img class='cp-cts-source-icon' src='${escapeHtml(iconUrl)}' alt='${sourceLabel}' title='${sourceLabel}' width='16' height='16'>`;
       const item = (
         `<button type='button' class='cp-cts-item ${isActive ? "cp-cts-active" : ""}' data-cts-template-id='${escapeHtml(
           String(template.id)
@@ -2661,7 +2627,6 @@
         sourceIcon +
         `<span class='cp-cts-item-label'>${escapeHtml(template.name || "Untitled")}</span>` +
         "<span class='cp-cts-item-meta'>" +
-        (picker ? "" : "<span class='cp-cts-badge cp-cts-badge-cp'>Contact Point</span>") +
         `${sourceOf(template) === "cloud" ? "<span aria-hidden='true' title='Cloud template'>☁</span>" : ""}` +
         `${
           isHubSpot
@@ -2673,7 +2638,7 @@
         "</span>" +
         "</button>"
       );
-      const favoriteKey = picker && composerEmailFavoriteKey(template);
+      const favoriteKey = composerFavoriteKey(kindKey, template);
       if (!favoriteKey) return item;
       return (
         "<div class='cp-cts-item-row'>" + item +
@@ -2713,7 +2678,7 @@
     kindState.busy = true;
     if (input instanceof HTMLInputElement) input.placeholder = "Applying...";
     try {
-      const result = await COMPOSER_SEARCH_KINDS[kindKey].apply(template);
+      const result = await COMPOSER_SEARCH_KINDS[kindKey].apply(template, kindState.dialog);
       if (!row?.isConnected) return;
 
       if (result?.needsHubSpotPicker) {
@@ -2756,7 +2721,6 @@
     if (event.key === "Escape") {
       if (kindState.picker?.docked) {
         event.stopPropagation();
-        kindState.picker.collapse.click();
       } else {
         closeComposerTemplateDropdown(kindKey);
       }
@@ -2782,16 +2746,18 @@
     }
   }
 
-  function positionComposerEmailSidebar() {
-    const { dialog, picker } = composerTemplateSearchState.kinds.email;
-    if (!picker) return;
+  function positionComposerSidebar(kindKey) {
+    const kindState = composerTemplateSearchState.kinds[kindKey];
+    const { dialog, picker } = kindState;
+    if (!picker || !dialog?.isConnected) return;
     const bounds = dialog.getBoundingClientRect();
     const top = Math.max(0, bounds.top);
     const height = Math.min(window.innerHeight, bounds.bottom) - top;
     const width = Math.min(344, bounds.left - 12);
-    const visible = isVisible(dialog) && height >= 170;
-    const fits = visible && width >= 280;
-    const docked = fits && !picker.collapsed;
+    const hasTemplates = kindKey === "email" || COMPOSER_SEARCH_KINDS[kindKey].getTemplates().length > 0;
+    const visible = hasTemplates && isVisible(dialog) && height >= 170;
+    const otherDialog = composerTemplateSearchState.kinds[kindKey === "email" ? "note" : "email"].dialog;
+    const docked = visible && picker.canDock && width >= 280 && !isComposerCovered(dialog, otherDialog, bounds);
     if (docked) {
       const left = bounds.left - width;
       const position = `${left}:${top}:${width}:${height}`;
@@ -2802,84 +2768,66 @@
         });
       }
     }
-    const kindState = composerTemplateSearchState.kinds.email;
     const hadSearchFocus = document.activeElement === picker.input;
     const dockChanged = picker.docked !== docked;
     if (dockChanged) {
       picker.docked = docked;
-      kindState.open = !docked && !fits && hadSearchFocus;
+      kindState.open = !docked && visible && hadSearchFocus;
       (docked ? picker.slot : picker.row).appendChild(picker.inputWrap);
     }
     picker.row.toggleAttribute("hidden", !visible || docked);
-    picker.launcher.toggleAttribute("hidden", !fits);
-    picker.inputWrap.toggleAttribute("hidden", fits && !docked);
     picker.panel.toggleAttribute("hidden", !docked);
     dialog.classList.toggle("cp-cts-composer-docked", docked);
     if (dockChanged) {
       renderComposerTemplateDropdown("email");
-      if (docked) refreshHubSpotTemplates();
-      if (hadSearchFocus && !picker.inputWrap.hidden && visible) picker.input.focus({ preventScroll: true });
+      if (docked && kindKey === "email") refreshHubSpotTemplates();
+      if (hadSearchFocus && visible) picker.input.focus({ preventScroll: true });
     }
   }
 
-  function mountComposerEmailSidebar(row, dialog, inputWrap, input, dropdown) {
-    const kindState = composerTemplateSearchState.kinds.email;
+  function isComposerCovered(dialog, otherDialog, bounds) {
+    if (!otherDialog?.isConnected) return false;
+    const x = bounds.left + bounds.width / 2;
+    const y = bounds.top + bounds.height / 2;
+    const frontComposer = document.elementsFromPoint(x, y).find((element) =>
+      dialog.contains(element) || otherDialog.contains(element)
+    );
+    return !!frontComposer && otherDialog.contains(frontComposer);
+  }
+
+  function mountComposerSidebar(kindKey, row, dialog, inputWrap, input, dropdown) {
+    const kindState = composerTemplateSearchState.kinds[kindKey];
     const panel = document.createElement("aside");
-    panel.id = "cp-email-template-sidebar";
+    panel.id = `cp-${kindKey}-template-sidebar`;
     panel.className = "cp-cts-sidebar";
-    panel.setAttribute("aria-label", "Contact Point email templates");
+    panel.setAttribute("aria-label", `Contact Point ${kindKey} templates`);
     panel.hidden = true;
     panel.innerHTML =
-      "<div class='cp-cts-sidebar-header'><div><span class='cp-cts-sidebar-brand'>Contact Point</span>" +
+      "<div class='cp-cts-sidebar-header'><span class='cp-cts-sidebar-brand'>Contact Point</span>" +
       "<strong class='cp-cts-sidebar-title'>Templates</strong></div>" +
-      "<button type='button' class='cp-cts-collapse' aria-label='Collapse email templates' title='Collapse templates'>" +
-      "<svg viewBox='0 0 16 16' aria-hidden='true'><path d='m10 3-5 5 5 5'/></svg></button></div>" +
       "<div class='cp-cts-status' role='status'></div><div class='cp-cts-sidebar-slot'></div>";
-    const launcher = document.createElement("button");
-    launcher.type = "button";
-    launcher.className = "cp-cts-launcher";
-    launcher.textContent = "Contact Point templates";
-    launcher.setAttribute("aria-controls", panel.id);
-    launcher.hidden = true;
-    row.appendChild(launcher);
     document.body.appendChild(panel);
 
     const picker = {
-      row, panel, inputWrap, input, dropdown, launcher,
+      row, panel, inputWrap, input, dropdown,
       portalId: getHubSpotPortalId(),
       hubSpotIconUrl: chrome.runtime.getURL("icons/hubspot.svg"),
       contactPointIconUrl: chrome.runtime.getURL("icons/contact-point-monochrome.svg"),
       slot: panel.querySelector(".cp-cts-sidebar-slot"),
       status: panel.querySelector(".cp-cts-status"),
-      collapse: panel.querySelector(".cp-cts-collapse"),
       favorites: new Map(),
       favoriteUpdates: new Set(),
-      docked: false,
-      collapsed: false
+      canDock: kindKey === "email" || !isTaskComposerRoot(dialog.closest("[role='dialog']") || dialog),
+      docked: false
     };
     kindState.picker = picker;
-    launcher.addEventListener("click", () => {
-      picker.collapsed = false;
-      positionComposerEmailSidebar();
-      if (picker.docked) input.focus();
-    });
-    picker.collapse.addEventListener("click", () => {
-      picker.collapsed = true;
-      positionComposerEmailSidebar();
-      launcher.focus();
-    });
-    panel.addEventListener("keydown", (event) => {
-      if (event.key !== "Escape") return;
-      event.stopPropagation();
-      picker.collapse.click();
-    });
 
     let frame = 0;
     const schedulePosition = () => {
       if (frame) return;
       frame = window.requestAnimationFrame(() => {
         frame = 0;
-        positionComposerEmailSidebar();
+        positionComposerSidebar(kindKey);
       });
     };
     const dragPosition = (event) => {
@@ -2905,8 +2853,7 @@
       dialog.classList.remove("cp-cts-composer-docked");
       panel.remove();
     };
-    positionComposerEmailSidebar();
-    void refreshComposerEmailFavorites();
+    void refreshComposerFavorites(kindKey);
   }
 
   function mountComposerTemplateSearchRow(kindKey, dialog) {
@@ -2939,7 +2886,7 @@
       renderComposerTemplateDropdown(kindKey);
     };
     input.addEventListener("focus", openPicker);
-    if (kindKey === "email") input.addEventListener("click", openPicker);
+    input.addEventListener("click", openPicker);
     input.addEventListener("input", () => {
       kindState.query = input.value;
       kindState.activeIndex = 0;
@@ -2988,20 +2935,12 @@
       if (!item) return;
       void handleComposerTemplateSelection(kindKey, item.getAttribute("data-cts-template-id"));
     };
-    if (kindKey === "email") {
-      dropdown.addEventListener("click", handlePickerClick);
-      dropdown.addEventListener("keydown", (event) => {
-        if (event.key !== "Escape" || kindState.picker?.docked) return;
-        input.focus();
-        closeComposerTemplateDropdown(kindKey);
-      });
-    } else {
-      dropdown.addEventListener("mousedown", (event) => {
-        if (!(event.target instanceof Element) || !event.target.closest("[data-cts-template-id]")) return;
-        event.preventDefault();
-        handlePickerClick(event);
-      });
-    }
+    dropdown.addEventListener("click", handlePickerClick);
+    dropdown.addEventListener("keydown", (event) => {
+      if (event.key !== "Escape" || kindState.picker?.docked) return;
+      input.focus();
+      closeComposerTemplateDropdown(kindKey);
+    });
 
     row.appendChild(bolt);
     inputWrap.appendChild(dropdown);
@@ -3028,10 +2967,8 @@
       dialog.insertBefore(row, header ? header.nextSibling : dialog.firstChild);
     }
 
-    if (kindKey === "email") {
-      mountComposerEmailSidebar(row, dialog, inputWrap, input, dropdown);
-      kindState.picker.status.addEventListener("click", handlePickerClick);
-    }
+    mountComposerSidebar(kindKey, row, dialog, inputWrap, input, dropdown);
+    kindState.picker.status.addEventListener("click", handlePickerClick);
 
     kindState.outsideClickHandler = (event) => {
       if (!(event.target instanceof Node) || !row.isConnected) return;
@@ -3046,8 +2983,8 @@
       composerTemplateSearchState.refreshKicked = true;
       void refreshContactTemplateData().finally(() => {
         composerTemplateSearchState.refreshKicked = false;
-        void refreshComposerEmailFavorites();
-        renderComposerTemplateDropdown("note");
+        void refreshComposerFavorites("email");
+        void refreshComposerFavorites("note");
       });
     }
   }
@@ -3055,7 +2992,7 @@
   function removeComposerTemplateSearchKind(kindKey) {
     const kindState = composerTemplateSearchState.kinds[kindKey];
     kindState.picker?.cleanup();
-    if (kindKey === "email") kindState.picker = null;
+    kindState.picker = null;
     document.getElementById(COMPOSER_SEARCH_KINDS[kindKey].rowId)?.remove();
     if (kindState.outsideClickHandler) {
       document.removeEventListener("mousedown", kindState.outsideClickHandler, true);
@@ -3078,9 +3015,9 @@
 
     // Cheap path first: row alive inside a still-connected dialog.
     const existingRow = document.getElementById(COMPOSER_SEARCH_KINDS[kindKey].rowId);
-    const samePortal = kindKey !== "email" || kindState.picker?.portalId === getHubSpotPortalId();
+    const samePortal = kindState.picker?.portalId === getHubSpotPortalId();
     if (samePortal && existingRow && kindState.dialog?.isConnected && kindState.dialog.contains(existingRow)) {
-      if (kindKey === "email") positionComposerEmailSidebar();
+      positionComposerSidebar(kindKey);
       return;
     }
     // Full teardown before any remount so a dialog swap can't leak the old
@@ -3880,9 +3817,9 @@
     return bestScore >= 6 ? best : null;
   }
 
-  function findNoteEditor() {
-    const candidates = Array.from(document.querySelectorAll("textarea, [contenteditable='true'], [role='textbox']")).filter((el) => {
-      if (!isVisible(el)) return false;
+  function findNoteEditor(scope = document, excludedRoot = null) {
+    const candidates = Array.from(scope.querySelectorAll("textarea, [contenteditable='true'], [role='textbox']")).filter((el) => {
+      if (excludedRoot?.contains(el) || !isVisible(el)) return false;
       if (el.tagName === "INPUT") return false;
       const hint = cleanText(
         el.getAttribute("placeholder") || el.getAttribute("aria-label") || el.getAttribute("data-selenium-test") || ""
@@ -4059,13 +3996,13 @@
   }
 
 
-  async function createNoteOnPage(noteBody, noteHtml = "") {
+  async function createNoteOnPage(noteBody, noteHtml = "", existingEditor = null) {
     const richHtml = toInsertableHtml(noteHtml || noteBody);
     const text = htmlToPlainText(richHtml || noteBody).trim();
     if (!text) throw new Error("Note text is empty.");
 
-    let editor = null;
-    for (let i = 0; i < TIMING.noteComposerOpenAttempts; i += 1) {
+    let editor = existingEditor;
+    for (let i = 0; !existingEditor && i < TIMING.noteComposerOpenAttempts; i += 1) {
       editor = findNoteEditor();
       if (editor && getNoteComposerRoot(editor)) break;
 
@@ -4076,7 +4013,7 @@
       await sleep(TIMING.noteComposerOpenDelayMs);
     }
 
-    if (!editor || !getNoteComposerRoot(editor)) {
+    if (!editor?.isConnected || !getNoteComposerRoot(editor)) {
       throw new Error("Could not find note editor on contact page.");
     }
 
@@ -5378,20 +5315,24 @@
     await applyEmailTemplateOnPage(subject, bodyPlainText, bodyHtml);
   }
 
-  async function applyInlineNoteTemplate(template) {
+  async function applyInlineNoteTemplate(template, dialog) {
     const context = getInlineContactContextOrThrow();
     const tokens = buildInlineTemplateTokens(context);
     const filledBodyHtml = applyInlineTemplateTokens(template?.body || "", tokens).trim();
     const noteBody = htmlToPlainText(filledBodyHtml) || filledBodyHtml;
     if (!noteBody) throw new Error("Selected note template is empty.");
 
-    // The task composer is checked first: findNoteEditor() also matches its
-    // fields, and would otherwise dump the whole body into the subject.
-    if (applyTemplateToOpenTaskComposer(template, filledBodyHtml, noteBody)) return;
+    const taskRoot = dialog?.closest("[role='dialog']") || dialog;
+    if (isTaskComposerRoot(taskRoot)) {
+      if (!applyTemplateToTaskComposer(taskRoot, template, filledBodyHtml, noteBody)) {
+        throw new Error("Could not find the fields in the HubSpot task composer.");
+      }
+      return;
+    }
 
-    const editor = findNoteEditor();
-    if (!editor || !getNoteComposerRoot(editor)) throw new Error("Open a HubSpot note composer first.");
-    await createNoteOnPage(noteBody, filledBodyHtml);
+    const editor = dialog?.isConnected ? findNoteEditor(dialog) : null;
+    if (!editor) throw new Error("Open a HubSpot note composer first.");
+    await createNoteOnPage(noteBody, filledBodyHtml, editor);
   }
 
   async function applyInlineWhatsappTemplate(template) {
@@ -5440,16 +5381,6 @@
     if (!(root instanceof Element) || !isVisible(root)) return false;
     if (root.getAttribute("role") === "dialog") return isTaskComposerDialog(root);
     return getTaskComposerMarkerScore(root) >= 36;
-  }
-
-  function findTaskComposerRoot() {
-    const dialogs = Array.from(document.querySelectorAll("[role='dialog']")).filter((dialog) => isTaskComposerDialog(dialog));
-    if (dialogs.length) return dialogs[0];
-
-    const candidateRoots = Array.from(
-      document.querySelectorAll("form, section, article, [role='region'], [data-test-id], [data-testid], [data-selenium-test]")
-    ).filter((root) => isTaskComposerRoot(root));
-    return candidateRoots[0] || null;
   }
 
   function scoreTaskTitleFieldCandidate(element) {
@@ -5549,10 +5480,7 @@
   // A note template applied while the task composer is open splits across the
   // two fields: template name into the subject, body into the description.
   // Notes have no title, so the note composer keeps taking body only.
-  function applyTemplateToOpenTaskComposer(template, filledBodyHtml, plainBody) {
-    const composerRoot = findTaskComposerRoot();
-    if (!(composerRoot instanceof Element)) return false;
-
+  function applyTemplateToTaskComposer(composerRoot, template, filledBodyHtml, plainBody) {
     const titleField = findTaskTitleField(composerRoot);
     const bodyField = findTaskBodyField(composerRoot, titleField);
     if (!titleField && !bodyField) return false;
