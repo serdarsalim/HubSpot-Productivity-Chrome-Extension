@@ -1401,7 +1401,6 @@
     "[data-test-id='profile-properties-list'], [data-selenium-test='profile-properties-list']";
 
   const sidebarDeclutterState = {
-    enabled: true,
     hideEmpty: false,
     searchQuery: "",
     searchInputValue: "",
@@ -1527,29 +1526,51 @@
       }
 
       .cp-sd-toggle {
+        display: inline-flex;
         flex: 0 0 auto;
-        height: 28px;
-        padding: 0 10px;
-        border: 1px solid #cbd6e2;
-        border-radius: 14px;
-        background: #ffffff;
+        align-items: center;
+        gap: 6px;
+        min-height: 28px;
+        padding: 0 2px;
+        border: 0;
+        border-radius: 4px;
+        background: transparent;
         color: #33475b;
         font-size: 12px;
-        font-weight: 500;
-        line-height: 26px;
+        font-weight: 600;
         white-space: nowrap;
         cursor: pointer;
-        transition: background-color 120ms ease, border-color 120ms ease, color 120ms ease;
       }
 
-      .cp-sd-toggle:hover {
-        border-color: #7c98b6;
+      .cp-sd-toggle:focus-visible {
+        outline: 2px solid #7c3aed;
+        outline-offset: 2px;
       }
 
-      .cp-sd-toggle[aria-pressed='true'] {
+      .cp-sd-toggle-track {
+        position: relative;
+        flex: 0 0 28px;
+        height: 16px;
+        border-radius: 999px;
+        background: #64748b;
+      }
+
+      .cp-sd-toggle-track::after {
+        position: absolute;
+        inset: 2px auto auto 2px;
+        width: 12px;
+        height: 12px;
+        border-radius: 50%;
+        background: #ffffff;
+        content: "";
+      }
+
+      .cp-sd-toggle[aria-checked='true'] .cp-sd-toggle-track {
         background: #7c3aed;
-        border-color: #7c3aed;
-        color: #ffffff;
+      }
+
+      .cp-sd-toggle[aria-checked='true'] .cp-sd-toggle-track::after {
+        transform: translateX(12px);
       }
 
       /* Every card repeats the same "Actions" dropdown; keep it for the card
@@ -1650,15 +1671,7 @@
 
   function syncSidebarDeclutterToggleButton(button) {
     if (!(button instanceof HTMLButtonElement)) return;
-    // Label names the action a click performs, not the current state.
-    button.textContent = sidebarDeclutterState.hideEmpty ? "Show empty" : "Hide empty";
-    button.setAttribute("aria-pressed", sidebarDeclutterState.hideEmpty ? "true" : "false");
-    button.setAttribute(
-      "title",
-      sidebarDeclutterState.hideEmpty
-        ? "Show properties without a value"
-        : "Hide properties without a value"
-    );
+    button.setAttribute("aria-checked", String(!sidebarDeclutterState.hideEmpty));
   }
 
   function handleSidebarDeclutterSearchInput(rawValue) {
@@ -1725,6 +1738,9 @@
     const toggle = document.createElement("button");
     toggle.className = "cp-sd-toggle";
     toggle.type = "button";
+    toggle.setAttribute("role", "switch");
+    toggle.title = "Show properties without a value";
+    toggle.innerHTML = "<span>Show empty</span><span class='cp-sd-toggle-track' aria-hidden='true'></span>";
     syncSidebarDeclutterToggleButton(toggle);
     toggle.addEventListener("click", () => {
       sidebarDeclutterState.hideEmpty = !sidebarDeclutterState.hideEmpty;
@@ -1775,8 +1791,7 @@
 
   function removeSidebarDeclutter() {
     document.getElementById(SIDEBAR_DECLUTTER_BAR_ID)?.remove();
-    // The stylesheet now carries always-on rules (hover-only card actions),
-    // so disabling the feature must drop it, not just the row classes.
+    // Keep the filter and its hover-only card rules scoped to record pages.
     document.getElementById(SIDEBAR_DECLUTTER_STYLE_ID)?.remove();
     for (const el of document.querySelectorAll(".cp-sd-hidden")) {
       el.classList.remove("cp-sd-hidden");
@@ -1793,7 +1808,7 @@
       sidebarDeclutterState.autoExpandedCardIds.clear();
     }
 
-    if (!sidebarDeclutterState.enabled || !isRecordPageForDeclutter()) {
+    if (!isRecordPageForDeclutter()) {
       removeSidebarDeclutter();
       return;
     }
@@ -4797,15 +4812,6 @@
         hidePhoneFlagTooltip();
         for (const flag of document.querySelectorAll(".cp-phone-flag")) flag.remove();
         scheduleContactEnhancers();
-      }
-
-      if (Object.prototype.hasOwnProperty.call(source, "sidebarDeclutterEnabled")) {
-        const nextEnabled = source.sidebarDeclutterEnabled !== false;
-        if (nextEnabled !== sidebarDeclutterState.enabled) {
-          sidebarDeclutterState.enabled = nextEnabled;
-          if (!nextEnabled) removeSidebarDeclutter();
-          scheduleContactEnhancers();
-        }
       }
     }
   }
