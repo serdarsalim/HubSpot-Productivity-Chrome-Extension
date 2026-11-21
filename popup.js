@@ -32,36 +32,6 @@
     });
   });
   if (dom.cloudTokenInfoBtn) dom.cloudTokenInfoBtn.addEventListener("click", App.openCloudTokenInfoDialog);
-  if (dom.countryCodeInfoBtn) {
-    dom.countryCodeInfoBtn.addEventListener("click", (event) => {
-      event.preventDefault();
-      event.stopPropagation();
-      App.openCountryCodeInfoDialog();
-    });
-  }
-  if (dom.countryCodeInfoCloseBtn) {
-    dom.countryCodeInfoCloseBtn.addEventListener("click", App.closeCountryCodeInfoDialog);
-  }
-  if (dom.countryCodeInfoOverlay) {
-    dom.countryCodeInfoOverlay.addEventListener("click", (event) => {
-      if (event.target === dom.countryCodeInfoOverlay) App.closeCountryCodeInfoDialog();
-    });
-  }
-  if (dom.backgroundTabInfoBtn) {
-    dom.backgroundTabInfoBtn.addEventListener("click", (event) => {
-      event.preventDefault();
-      event.stopPropagation();
-      App.openBackgroundTabInfoDialog();
-    });
-  }
-  if (dom.backgroundTabInfoCloseBtn) {
-    dom.backgroundTabInfoCloseBtn.addEventListener("click", App.closeBackgroundTabInfoDialog);
-  }
-  if (dom.backgroundTabInfoOverlay) {
-    dom.backgroundTabInfoOverlay.addEventListener("click", (event) => {
-      if (event.target === dom.backgroundTabInfoOverlay) App.closeBackgroundTabInfoDialog();
-    });
-  }
 
   if (dom.addEmailTemplateBtn) {
     dom.addEmailTemplateBtn.addEventListener("click", App.addEmailTemplateDraft);

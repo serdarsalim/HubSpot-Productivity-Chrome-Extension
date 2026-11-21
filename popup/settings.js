@@ -254,32 +254,6 @@
     });
   }
 
-  function openCountryCodeInfoDialog() {
-    if (!dom.countryCodeInfoOverlay) return;
-    dom.countryCodeInfoOverlay.classList.add("open");
-  }
-
-  function closeCountryCodeInfoDialog() {
-    if (!dom.countryCodeInfoOverlay) return;
-    App.blurFocusedElementWithin(dom.countryCodeInfoOverlay);
-    requestAnimationFrame(() => {
-      dom.countryCodeInfoOverlay.classList.remove("open");
-    });
-  }
-
-  function openBackgroundTabInfoDialog() {
-    if (!dom.backgroundTabInfoOverlay) return;
-    dom.backgroundTabInfoOverlay.classList.add("open");
-  }
-
-  function closeBackgroundTabInfoDialog() {
-    if (!dom.backgroundTabInfoOverlay) return;
-    App.blurFocusedElementWithin(dom.backgroundTabInfoOverlay);
-    requestAnimationFrame(() => {
-      dom.backgroundTabInfoOverlay.classList.remove("open");
-    });
-  }
-
   function rerenderTemplateViewsForCloudChange() {
     if (!dom.emailTemplatesPageEl?.hidden && typeof App.renderEmailTemplatesPage === "function") {
       App.renderEmailTemplatesPage();
@@ -2180,10 +2154,6 @@
     closeTemplateImportReview,
     openCloudTokenInfoDialog,
     closeCloudTokenInfoDialog,
-    openCountryCodeInfoDialog,
-    closeCountryCodeInfoDialog,
-    openBackgroundTabInfoDialog,
-    closeBackgroundTabInfoDialog,
     applyTemplateImport,
     renderCloudConnectionStatus,
     renderCloudAuthCards,
