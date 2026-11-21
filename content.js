@@ -2368,6 +2368,9 @@
 
       .cp-cts-sidebar[hidden],
       .cp-cts-row[hidden],
+      .cp-cts-list-section[hidden],
+      .cp-cts-item-row[hidden],
+      .cp-cts-item[hidden],
       .cp-cts-status:empty {
         display: none;
       }
@@ -2435,6 +2438,8 @@
         display: flex;
         align-items: center;
         gap: 2px;
+        content-visibility: auto;
+        contain-intrinsic-height: 36px;
       }
 
       .cp-cts-item-row .cp-cts-item {
@@ -2529,14 +2534,6 @@
     return null;
   }
 
-  function getComposerVisibleTemplates(kindKey) {
-    const kindState = composerTemplateSearchState.kinds[kindKey];
-    const templates = COMPOSER_SEARCH_KINDS[kindKey].getTemplates();
-    const query = normalizeSearchText(kindState.query || "");
-    if (!query) return templates;
-    return templates.filter((template) => searchTextMatchesQuery(template?.name || "", query));
-  }
-
   function composerFavoriteKey(kindKey, template) {
     const portalId = composerTemplateSearchState.kinds[kindKey].picker?.portalId;
     const prefix = kindKey === "email" ? "cpEmailFavorite" : "cpNoteFavorite";
@@ -2578,42 +2575,30 @@
     const all = COMPOSER_SEARCH_KINDS[kindKey].getTemplates();
     if (!all.length) {
       kindState.visibleTemplateIds = [];
+      picker.visibleButtons = [];
+      picker.sections = null;
       dropdown.innerHTML = `<div class='cp-cts-empty'>${escapeHtml(COMPOSER_SEARCH_KINDS[kindKey].emptyText)}</div>`;
       return;
     }
 
-    const visible = getComposerVisibleTemplates(kindKey);
-    if (!visible.length) {
-      kindState.visibleTemplateIds = [];
-      dropdown.innerHTML = "<div class='cp-cts-empty'>No templates match that title.</div>";
-      return;
-    }
-
-    if (kindState.activeIndex >= visible.length) {
-      kindState.activeIndex = 0;
-    }
-
     const sourceOf = (template) => String(template?.source || "").toLowerCase();
     const isStarred = (template) => picker.favorites.get(composerFavoriteKey(kindKey, template)) === true;
-    const starred = visible.filter(isStarred);
-    const remaining = visible.filter((template) => !isStarred(template));
+    const starred = all.filter(isStarred);
+    const remaining = all.filter((template) => !isStarred(template));
     const cloud = remaining.filter((template) => sourceOf(template) === "cloud");
     const hubspot = remaining.filter((template) => sourceOf(template) === "hubspot");
     const personal = remaining.filter((template) => !["cloud", "hubspot"].includes(sourceOf(template)));
     const sections = [["Starred", starred], ["Cloud", cloud], ["Personal", personal], ["HubSpot", hubspot]];
-    kindState.visibleTemplateIds = sections.flatMap(([, templates]) => templates.map((template) => String(template.id)));
 
     const renderItem = (template) => {
-      const index = kindState.visibleTemplateIds.indexOf(String(template.id));
-      const isActive = index === kindState.activeIndex;
       const isHubSpot = sourceOf(template) === "hubspot";
       const sourceLabel = isHubSpot ? "HubSpot" : "Contact Point";
       const iconUrl = isHubSpot ? picker.hubSpotIconUrl : picker.contactPointIconUrl;
       const sourceIcon = `<img class='cp-cts-source-icon' src='${escapeHtml(iconUrl)}' alt='${sourceLabel}' title='${sourceLabel}' width='16' height='16'>`;
       const item = (
-        `<button type='button' class='cp-cts-item ${isActive ? "cp-cts-active" : ""}' data-cts-template-id='${escapeHtml(
+        `<button type='button' class='cp-cts-item' data-cts-template-id='${escapeHtml(
           String(template.id)
-        )}' data-cts-index='${index}'>` +
+        )}'>` +
         sourceIcon +
         `<span class='cp-cts-item-label'>${escapeHtml(template.name || "Untitled")}</span>` +
         (sourceOf(template) === "cloud"
@@ -2633,11 +2618,46 @@
       );
     };
 
-    dropdown.innerHTML = sections.map(([label, templates]) => templates.length
-      ? `<div class='cp-cts-section'>${label}</div>` + templates.map(renderItem).join("")
-      : "").join("");
+    const populated = sections.filter(([, templates]) => templates.length);
+    dropdown.innerHTML = populated.map(([label, templates]) =>
+      `<div class='cp-cts-list-section'><div class='cp-cts-section'>${label}</div>${templates.map(renderItem).join("")}</div>`
+    ).join("") + "<div class='cp-cts-empty' hidden>No templates match that title.</div>";
+    picker.sections = populated.map(([, templates], index) => {
+      const element = dropdown.children[index];
+      return {
+        element,
+        rows: Array.from(element.querySelectorAll("[data-cts-template-id]"), (button, rowIndex) => ({
+          button,
+          element: button.closest(".cp-cts-item-row") || button,
+          name: normalizeSearchText(templates[rowIndex].name || "")
+        }))
+      };
+    });
+    picker.noMatches = dropdown.lastElementChild;
+    filterComposerTemplateRows(kindState);
     dropdown.scrollTop = scrollTop;
     if (focusedStar) dropdown.querySelector(`[data-cts-favorite="${CSS.escape(focusedStar)}"]`)?.focus();
+  }
+
+  function filterComposerTemplateRows(kindState) {
+    const { picker } = kindState;
+    const tokens = normalizeSearchTokens(kindState.query);
+    const buttons = [];
+    for (const section of picker.sections) {
+      const firstIndex = buttons.length;
+      for (const row of section.rows) {
+        const matches = tokens.every((token) => row.name.includes(token));
+        row.element.toggleAttribute("hidden", !matches);
+        if (matches) buttons.push(row.button);
+      }
+      section.element.toggleAttribute("hidden", buttons.length === firstIndex);
+    }
+    picker.noMatches.toggleAttribute("hidden", buttons.length > 0);
+    picker.visibleButtons = buttons;
+    kindState.visibleTemplateIds = buttons.map((button) => button.dataset.ctsTemplateId);
+    if (kindState.activeIndex >= buttons.length) kindState.activeIndex = 0;
+    picker.dropdown.querySelector(".cp-cts-active")?.classList.remove("cp-cts-active");
+    buttons[kindState.activeIndex]?.classList.add("cp-cts-active");
   }
 
   function closeComposerTemplateDropdown(kindKey) {
@@ -2666,6 +2686,7 @@
 
       if (result?.needsHubSpotPicker) {
         if (notice) {
+          if (notice === picker?.dropdown) picker.sections = null;
           notice.innerHTML =
             "<div class='cp-cts-notice'>" +
             `<span>Can't fill this one here because ${escapeHtml(cleanText(result.reason || ""))}.</span>` +
@@ -2685,6 +2706,7 @@
       closeComposerTemplateDropdown(kindKey);
     } catch (error) {
       if (notice) {
+        if (notice === picker?.dropdown) picker.sections = null;
         notice.innerHTML = `<div class='cp-cts-empty'>${escapeHtml(
           cleanText(String(error?.message || error || "Could not apply the template."))
         )}</div>`;
@@ -2710,12 +2732,21 @@
       event.preventDefault();
       if (!kindState.open && !kindState.picker?.docked) {
         kindState.open = true;
-      } else if (ids.length) {
-        const delta = event.key === "ArrowDown" ? 1 : -1;
-        kindState.activeIndex = (kindState.activeIndex + delta + ids.length) % ids.length;
+        renderComposerTemplateDropdown(kindKey);
+        return;
       }
-      renderComposerTemplateDropdown(kindKey);
-      kindState.picker?.dropdown.querySelector(".cp-cts-active")?.scrollIntoView({ block: "nearest" });
+      if (!ids.length || !kindState.picker) return;
+      const delta = event.key === "ArrowDown" ? 1 : -1;
+      kindState.activeIndex = (kindState.activeIndex + delta + ids.length) % ids.length;
+      const { dropdown } = kindState.picker;
+      const item = kindState.picker.visibleButtons?.[kindState.activeIndex];
+      if (!item?.isConnected) {
+        renderComposerTemplateDropdown(kindKey);
+        return;
+      }
+      dropdown.querySelector(".cp-cts-active")?.classList.remove("cp-cts-active");
+      item.classList.add("cp-cts-active");
+      item.closest(".cp-cts-item-row")?.scrollIntoView({ block: "nearest" });
       return;
     }
     if (event.key === "Enter") {
@@ -2759,7 +2790,7 @@
     picker.panel.toggleAttribute("hidden", !docked);
     dialog.classList.toggle("cp-cts-composer-docked", docked);
     if (dockChanged) {
-      renderComposerTemplateDropdown("email");
+      renderComposerTemplateDropdown(kindKey);
       if (docked && kindKey === "email") refreshHubSpotTemplates();
       if (hadSearchFocus && visible) picker.input.focus({ preventScroll: true });
     }
@@ -2872,7 +2903,13 @@
       kindState.activeIndex = 0;
       kindState.open = true;
       if (kindState.picker) kindState.picker.status.textContent = "";
-      renderComposerTemplateDropdown(kindKey);
+      const picker = kindState.picker;
+      if (picker?.sections && picker.dropdown.classList.contains("cp-cts-open")) {
+        filterComposerTemplateRows(kindState);
+        picker.dropdown.scrollTop = 0;
+      } else {
+        renderComposerTemplateDropdown(kindKey);
+      }
     });
     input.addEventListener("keydown", (event) => handleComposerSearchKeydown(kindKey, event));
     inputWrap.appendChild(input);
@@ -2982,6 +3019,7 @@
     kindState.open = false;
     kindState.query = "";
     kindState.activeIndex = 0;
+    kindState.visibleTemplateIds = [];
   }
 
   function removeComposerTemplateSearch() {
@@ -3285,7 +3323,13 @@
     ensureContactIndexNewTabStyles();
     runContactEnhancers();
     if (!document.body) return;
-    contactEnhancerObserver = new MutationObserver(scheduleContactEnhancers);
+    contactEnhancerObserver = new MutationObserver((mutations) => {
+      // Template list updates need no page-wide HubSpot enhancement pass.
+      const changedHubSpot = mutations.some(({ target }) =>
+        !(target instanceof Element) || !target.closest(".cp-cts-row, .cp-cts-sidebar, .cp-wa-pop")
+      );
+      if (changedHubSpot) scheduleContactEnhancers();
+    });
     contactEnhancerObserver.observe(document.body, {
       childList: true,
       subtree: true
