@@ -50,7 +50,9 @@
   "web_accessible_resources": [
     {
       "resources": [
-        "vendor/flags/*.svg"
+        "vendor/flags/*.svg",
+        "icons/hubspot.svg",
+        "icons/icon-32.png"
       ],
       "matches": [
         "https://*.hubspot.com/*"
