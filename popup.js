@@ -32,21 +32,6 @@
     });
   });
   if (dom.cloudTokenInfoBtn) dom.cloudTokenInfoBtn.addEventListener("click", App.openCloudTokenInfoDialog);
-  if (dom.contactWidgetInfoBtn) {
-    dom.contactWidgetInfoBtn.addEventListener("click", (event) => {
-      event.preventDefault();
-      event.stopPropagation();
-      App.openContactWidgetInfoDialog();
-    });
-  }
-  if (dom.contactWidgetInfoCloseBtn) {
-    dom.contactWidgetInfoCloseBtn.addEventListener("click", App.closeContactWidgetInfoDialog);
-  }
-  if (dom.contactWidgetInfoOverlay) {
-    dom.contactWidgetInfoOverlay.addEventListener("click", (event) => {
-      if (event.target === dom.contactWidgetInfoOverlay) App.closeContactWidgetInfoDialog();
-    });
-  }
   if (dom.countryCodeInfoBtn) {
     dom.countryCodeInfoBtn.addEventListener("click", (event) => {
       event.preventDefault();

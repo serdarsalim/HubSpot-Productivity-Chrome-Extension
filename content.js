@@ -39,13 +39,6 @@
   const CLOUD_NOTE_CACHE_PREFIX = "popupCloudNoteTemplates::";
   const CLOUD_TEMPLATE_ID_PREFIX = "cloud_";
   const CLOUD_API_BASE_URL = cleanText(shared.CLOUD_API_BASE_URL || "https://contactpoint.vercel.app");
-  const INLINE_QUICK_ACTIONS_ROOT_ID = "cpInlineQuickActionsRoot";
-  const PENDING_INLINE_EMAIL_APPLY_SESSION_KEY = "cpPendingInlineEmailApply";
-  const PENDING_INLINE_NOTE_APPLY_SESSION_KEY = "cpPendingInlineNoteApply";
-  const PENDING_INLINE_TASK_OPEN_SESSION_KEY = "cpPendingInlineTaskOpen";
-  const INLINE_QUICK_ACTIONS_STYLE_ID = "cpInlineQuickActionsStyle";
-  const INLINE_QUICK_ACTIONS_POSITION_LOCAL_KEY = "popupInlineQuickActionsPosition";
-  const INLINE_QUICK_ACTIONS_CHECK_INTERVAL_MS = 900;
   const CONTACT_INDEX_NEW_TAB_STYLE_ID = "cpContactIndexNewTabStyle";
   const SIDEBAR_DECLUTTER_BAR_ID = "cpSidebarDeclutterBar";
   const SIDEBAR_DECLUTTER_STYLE_ID = "cpSidebarDeclutterStyle";
@@ -198,7 +191,7 @@
         if (chrome.runtime.lastError) return;
         const settings = result?.[SETTINGS_KEY];
         applyHubSpotThemeMode(settings?.themeMode || "light");
-        applyInlineQuickActionsSettings(settings);
+        applyContactEnhancerSettings(settings);
       });
     } catch (_error) {
       // Ignore storage read failures.
@@ -213,7 +206,7 @@
         if (areaName === "sync" && Object.prototype.hasOwnProperty.call(changes, SETTINGS_KEY)) {
           const nextSettings = changes[SETTINGS_KEY]?.newValue;
           applyHubSpotThemeMode(nextSettings?.themeMode || "light");
-          applyInlineQuickActionsSettings(nextSettings);
+          applyContactEnhancerSettings(nextSettings);
         }
 
         if (areaName === "local" && Object.prototype.hasOwnProperty.call(changes, SIDEBAR_HIDE_EMPTY_LOCAL_KEY)) {
@@ -221,28 +214,19 @@
           scheduleContactEnhancers();
         }
 
-        if (areaName === "local" && Object.prototype.hasOwnProperty.call(changes, INLINE_QUICK_ACTIONS_POSITION_LOCAL_KEY)) {
-          const nextPosition = normalizeInlineQuickActionsPosition(changes[INLINE_QUICK_ACTIONS_POSITION_LOCAL_KEY]?.newValue);
-          inlineQuickActionsState.position = nextPosition;
-          applyInlineQuickActionsPosition();
-        }
-
         if (areaName === "local" && Object.prototype.hasOwnProperty.call(changes, TEMPLATE_USAGE_LOCAL_KEY)) {
-          inlineQuickActionsState.templateUsageByContact = normalizeInlineTemplateUsageMap(
+          contactTemplateState.templateUsageByContact = normalizeInlineTemplateUsageMap(
             changes[TEMPLATE_USAGE_LOCAL_KEY]?.newValue
           );
-          if (inlineQuickActionsState.activeKind) {
-            renderInlineQuickActionsPanel(inlineQuickActionsState.activeKind);
-          }
+          renderComposerTemplateDropdown("email");
+          if (waTemplatePopoverState.open) renderWaTemplatePopoverList();
         }
 
         if (areaName === "local" && Object.prototype.hasOwnProperty.call(changes, INLINE_NOTE_TEMPLATE_USAGE_LOCAL_KEY)) {
-          inlineQuickActionsState.noteTemplateUsageByContact = normalizeInlineNoteTemplateUsageMap(
+          contactTemplateState.noteTemplateUsageByContact = normalizeInlineNoteTemplateUsageMap(
             changes[INLINE_NOTE_TEMPLATE_USAGE_LOCAL_KEY]?.newValue
           );
-          if (inlineQuickActionsState.activeKind === "note") {
-            renderInlineQuickActionsPanel("note");
-          }
+          renderComposerTemplateDropdown("note");
         }
 
         if (areaName === "local") {
@@ -260,12 +244,12 @@
             );
           });
 
-          if (templatesDataChanged && (inlineQuickActionsState.rootEl || composerTemplateSearchState.kinds.email.dialog)) {
-            void refreshInlineQuickActionsData().then(() => {
-              if (inlineQuickActionsState.activeKind) {
-                renderInlineQuickActionsPanel(inlineQuickActionsState.activeKind);
-              }
-              refreshComposerEmailFavorites();
+          const { email, note } = composerTemplateSearchState.kinds;
+          if (templatesDataChanged && (email.dialog || note.dialog || waTemplatePopoverState.open)) {
+            void refreshContactTemplateData().then(() => {
+              void refreshComposerEmailFavorites();
+              renderComposerTemplateDropdown("note");
+              if (waTemplatePopoverState.open) renderWaTemplatePopoverList();
             });
           }
 
@@ -1011,12 +995,12 @@
   // draw one: feature off, country excluded in settings, or the number has no
   // "+" prefix (its country would just echo the rep's default prefix).
   function resolvePhoneFlagCountry(rawPhone) {
-    if (!inlineQuickActionsState.phoneFlagsEnabled) return null;
+    if (!contactTemplateState.phoneFlagsEnabled) return null;
     const resolver = globalThis.ContactPilotShared?.phoneCountry;
     if (typeof resolver !== "function") return null;
     const country = resolver(rawPhone);
     if (!country) return null;
-    if (inlineQuickActionsState.phoneFlagsExcludedIsos.includes(country.iso)) return null;
+    if (contactTemplateState.phoneFlagsExcludedIsos.includes(country.iso)) return null;
     return country;
   }
 
@@ -1078,7 +1062,7 @@
   }
 
   function buildContactIndexWhatsappUrl(rawPhone) {
-    const phoneDigits = normalizePhone(rawPhone, inlineQuickActionsState.countryPrefix) || "";
+    const phoneDigits = normalizePhone(rawPhone, contactTemplateState.countryPrefix) || "";
     if (!phoneDigits) return "";
     return `https://web.whatsapp.com/send/?phone=${phoneDigits}&type=phone_number`;
   }
@@ -1211,7 +1195,7 @@
     button.className = "cp-contact-index-whatsapp-btn";
     button.setAttribute("aria-label", "Open number in WhatsApp");
     button.setAttribute("title", "Open in WhatsApp");
-    button.innerHTML = inlineActionIcon("whatsapp");
+    button.innerHTML = whatsappIcon();
     button.addEventListener("click", async (event) => {
       event.preventDefault();
       event.stopPropagation();
@@ -1227,17 +1211,11 @@
     button.dataset.waUrl = waUrl;
     button.setAttribute("aria-label", "Open number in WhatsApp");
     button.setAttribute("title", "WhatsApp templates");
-    button.innerHTML = inlineActionIcon("whatsapp");
-    button.addEventListener("click", async (event) => {
+    button.innerHTML = whatsappIcon();
+    button.addEventListener("click", (event) => {
       event.preventDefault();
       event.stopPropagation();
-      // With template search enabled the button anchors the template popover;
-      // otherwise it keeps the classic instant-open behavior.
-      if (composerTemplateSearchState.enabled) {
-        openWaTemplatePopover(button);
-        return;
-      }
-      await openOrReuseWhatsappTab(waUrl);
+      openWaTemplatePopover(button);
     });
     return button;
   }
@@ -1372,8 +1350,8 @@
 
   function decorateActiveContactPhoneTextFlags() {
     if (inferObjectKindFromPath() !== "contact" || !getRecordIdFromPath()) return;
-    // Toggle-off removal is handled centrally in applyInlineQuickActionsSettings.
-    const flagsEnabled = inlineQuickActionsState.phoneFlagsEnabled;
+    // Toggle-off removal is handled centrally in applyContactEnhancerSettings.
+    const flagsEnabled = contactTemplateState.phoneFlagsEnabled;
 
     for (const node of document.querySelectorAll("span, a, p, div")) {
       if (node.childElementCount !== 0) continue;
@@ -1841,7 +1819,6 @@
 
   // --- Composer template search ---
   const composerTemplateSearchState = {
-    enabled: true,
     refreshKicked: false,
     kinds: {
       email: {
@@ -1874,7 +1851,7 @@
   // script, so the session cookie plus the CSRF header is all it needs.
   // Unpublished API: every failure falls back to Contact Point templates only.
   const HUBSPOT_TEMPLATE_CACHE_MS = 5 * 60 * 1000;
-  const hubspotTemplateState = { items: [], fetchedAt: 0, inFlight: null, failed: false, enabled: true, portalId: "" };
+  const hubspotTemplateState = { items: [], fetchedAt: 0, inFlight: null, portalId: "" };
 
   function readBrowserCookie(name) {
     for (const part of String(document.cookie || "").split("; ")) {
@@ -1917,7 +1894,6 @@
   }
 
   function refreshHubSpotTemplates() {
-    if (!hubspotTemplateState.enabled) return;
     const portalId = getHubSpotPortalId();
     if (hubspotTemplateState.portalId !== portalId) {
       Object.assign(hubspotTemplateState, { portalId, items: [], fetchedAt: 0, inFlight: null });
@@ -1930,11 +1906,9 @@
       .then((items) => {
         if (hubspotTemplateState.inFlight !== request) return;
         hubspotTemplateState.items = items;
-        hubspotTemplateState.failed = false;
       })
       .catch(() => {
-        if (hubspotTemplateState.inFlight !== request) return;
-        hubspotTemplateState.failed = true;
+        // The Contact Point library remains available when HubSpot search fails.
       })
       .finally(() => {
         if (hubspotTemplateState.inFlight !== request) return;
@@ -2144,8 +2118,8 @@
         return dialog;
       },
       getTemplates: () => [
-        ...(inlineQuickActionsState.templates?.email || []),
-        ...(hubspotTemplateState.enabled && hubspotTemplateState.portalId === getHubSpotPortalId()
+        ...(contactTemplateState.templates?.email || []),
+        ...(hubspotTemplateState.portalId === getHubSpotPortalId()
           ? hubspotTemplateState.items
           : [])
       ],
@@ -2162,7 +2136,7 @@
         const editor = findNoteEditor();
         return editor ? getNoteComposerRoot(editor) : null;
       },
-      getTemplates: () => inlineQuickActionsState.templates?.note || [],
+      getTemplates: () => contactTemplateState.templates?.note || [],
       apply: (template) => applyInlineNoteTemplate(template)
     }
   };
@@ -3052,11 +3026,10 @@
     };
     document.addEventListener("mousedown", kindState.outsideClickHandler, true);
 
-    // The widget only loads templates when it mounts; the composer row must
-    // not depend on that, so it triggers its own load once per mount.
+    // Email and note can mount together and share the same template load.
     if (!composerTemplateSearchState.refreshKicked) {
       composerTemplateSearchState.refreshKicked = true;
-      void refreshInlineQuickActionsData().finally(() => {
+      void refreshContactTemplateData().finally(() => {
         composerTemplateSearchState.refreshKicked = false;
         void refreshComposerEmailFavorites();
         renderComposerTemplateDropdown("note");
@@ -3108,7 +3081,7 @@
   }
 
   function ensureComposerTemplateSearch() {
-    if (!composerTemplateSearchState.enabled || !isInlineQuickActionsEligiblePage()) {
+    if (!isContactRecordPage()) {
       removeComposerTemplateSearch();
       return;
     }
@@ -3153,7 +3126,7 @@
   }
 
   function getWaPopoverVisibleTemplates() {
-    const templates = inlineQuickActionsState.templates?.whatsapp || [];
+    const templates = contactTemplateState.templates?.whatsapp || [];
     const query = normalizeSearchText(waTemplatePopoverState.query || "");
     if (!query) return templates;
     return templates.filter((template) => searchTextMatchesQuery(template?.name || "", query));
@@ -3214,7 +3187,7 @@
       return;
     }
 
-    const template = (inlineQuickActionsState.templates?.whatsapp || []).find(
+    const template = (contactTemplateState.templates?.whatsapp || []).find(
       (item) => String(item?.id || "") === String(templateId || "")
     );
     if (!template) return;
@@ -3322,7 +3295,7 @@
     window.addEventListener("scroll", waTemplatePopoverState.scrollHandler, true);
 
     renderWaTemplatePopoverList();
-    void refreshInlineQuickActionsData().then(() => {
+    void refreshContactTemplateData().then(() => {
       if (waTemplatePopoverState.open) renderWaTemplatePopoverList();
     });
     input.focus();
@@ -3833,106 +3806,6 @@
     );
   }
 
-  function isInlineQuickActionsElement(element) {
-    return !!(element instanceof Element && element.closest(`#${INLINE_QUICK_ACTIONS_ROOT_ID}`));
-  }
-
-  function getCurrentContactRouteContext() {
-    return {
-      portalId: getPortalIdFromPath(),
-      recordId: getRecordIdFromPath(),
-      origin: String(location.origin || "")
-    };
-  }
-
-  function buildCurrentContactInteractionUrl(interaction) {
-    const { portalId, recordId, origin } = getCurrentContactRouteContext();
-    const cleanInteraction = String(interaction || "").trim().toLowerCase();
-    if (!portalId || !recordId || !origin || !cleanInteraction) return "";
-    return `${origin}/contacts/${portalId}/record/0-1/${recordId}?interaction=${encodeURIComponent(cleanInteraction)}`;
-  }
-
-  function savePendingInlineEmailApply(payload) {
-    try {
-      window.sessionStorage?.setItem(PENDING_INLINE_EMAIL_APPLY_SESSION_KEY, JSON.stringify(payload || {}));
-    } catch (_error) {
-      // Ignore storage failures and fall back to direct page automation only.
-    }
-  }
-
-  function loadPendingInlineEmailApply() {
-    try {
-      const raw = window.sessionStorage?.getItem(PENDING_INLINE_EMAIL_APPLY_SESSION_KEY);
-      if (!raw) return null;
-      const parsed = JSON.parse(raw);
-      return parsed && typeof parsed === "object" ? parsed : null;
-    } catch (_error) {
-      return null;
-    }
-  }
-
-  function clearPendingInlineEmailApply() {
-    try {
-      window.sessionStorage?.removeItem(PENDING_INLINE_EMAIL_APPLY_SESSION_KEY);
-    } catch (_error) {
-      // Ignore storage failures.
-    }
-  }
-
-  function savePendingInlineNoteApply(payload) {
-    try {
-      window.sessionStorage?.setItem(PENDING_INLINE_NOTE_APPLY_SESSION_KEY, JSON.stringify(payload || {}));
-    } catch (_error) {
-      // Ignore storage failures and fall back to direct page automation only.
-    }
-  }
-
-  function loadPendingInlineNoteApply() {
-    try {
-      const raw = window.sessionStorage?.getItem(PENDING_INLINE_NOTE_APPLY_SESSION_KEY);
-      if (!raw) return null;
-      const parsed = JSON.parse(raw);
-      return parsed && typeof parsed === "object" ? parsed : null;
-    } catch (_error) {
-      return null;
-    }
-  }
-
-  function clearPendingInlineNoteApply() {
-    try {
-      window.sessionStorage?.removeItem(PENDING_INLINE_NOTE_APPLY_SESSION_KEY);
-    } catch (_error) {
-      // Ignore storage failures.
-    }
-  }
-
-  function savePendingInlineTaskOpen(payload) {
-    try {
-      window.sessionStorage?.setItem(PENDING_INLINE_TASK_OPEN_SESSION_KEY, JSON.stringify(payload || {}));
-    } catch (_error) {
-      // Ignore storage failures and fall back to direct page automation only.
-    }
-  }
-
-  function loadPendingInlineTaskOpen() {
-    try {
-      const raw = window.sessionStorage?.getItem(PENDING_INLINE_TASK_OPEN_SESSION_KEY);
-      if (!raw) return null;
-      const parsed = JSON.parse(raw);
-      return parsed && typeof parsed === "object" ? parsed : null;
-    } catch (_error) {
-      return null;
-    }
-  }
-
-  function clearPendingInlineTaskOpen() {
-    try {
-      window.sessionStorage?.removeItem(PENDING_INLINE_TASK_OPEN_SESSION_KEY);
-    } catch (_error) {
-      // Ignore storage failures.
-    }
-  }
-
   function isLikelyPropertyFieldHint(hint) {
     const text = String(hint || "").toLowerCase();
     if (!text) return false;
@@ -4030,7 +3903,7 @@
   function clickNoteTrigger() {
     const triggers = Array.from(document.querySelectorAll("button, [role='button']")).filter((el) => {
       if (!isVisible(el)) return false;
-      if (isInlineQuickActionsElement(el)) return false;
+
       const text = elementText(el).toLowerCase();
       if (!text) return false;
       if (text.includes("cancel") || text.includes("close")) return false;
@@ -4053,7 +3926,7 @@
 
     for (const el of controls) {
       if (!isVisible(el)) continue;
-      if (isInlineQuickActionsElement(el)) continue;
+
       const label = elementText(el).toLowerCase();
       if (!label) continue;
       if (label !== desired) continue;
@@ -4100,17 +3973,6 @@
 
   function clickEmailActivityTab() {
     const labels = ["emails", "email"];
-    for (const label of labels) {
-      const tab = findHubSpotCenterTabControl(label);
-      if (!tab) continue;
-      tab.click();
-      return true;
-    }
-    return false;
-  }
-
-  function clickTaskActivityTab() {
-    const labels = ["tasks", "task", "to-dos", "to do", "todo"];
     for (const label of labels) {
       const tab = findHubSpotCenterTabControl(label);
       if (!tab) continue;
@@ -4328,7 +4190,7 @@
 
   function getEmailComposerTriggers() {
     const candidates = Array.from(document.querySelectorAll("button, [role='button'], a")).filter(
-      (el) => isVisible(el) && !isInlineQuickActionsElement(el)
+      (el) => isVisible(el)
     );
     const matches = [];
 
@@ -4896,22 +4758,7 @@
     await applyEmailTemplateOnPage(subject, body, bodyHtml);
   }
 
-  async function openNoteComposerUiOnPage() {
-    for (let i = 0; i < TIMING.noteComposerOpenAttempts; i += 1) {
-      const editor = findNoteEditor();
-      if (editor && getNoteComposerRoot(editor)) return;
-      if (i === 0 || i % 3 === 0) clickActivitiesTab();
-      if (i === 1 || i % 3 === 1) clickNotesActivityTab();
-      clickNoteTrigger();
-      await sleep(TIMING.noteComposerOpenDelayMs);
-    }
-  }
-
-  const inlineQuickActionsState = {
-    rootEl: null,
-    panelEl: null,
-    statusEl: null,
-    activeKind: "",
+  const contactTemplateState = {
     templates: {
       email: [],
       note: [],
@@ -4920,31 +4767,10 @@
     cloudAuthList: [],
     templateUsageByContact: {},
     noteTemplateUsageByContact: {},
-    enabled: true,
     countryPrefix: DEFAULT_COUNTRY_CODE,
     phoneFlagsEnabled: true,
-    phoneFlagsExcludedIsos: [],
-    position: null,
-    busy: false,
-    pendingEmailApplyRunning: false,
-    pendingNoteApplyRunning: false,
-    pendingTaskOpenRunning: false,
-    searchQuery: "",
-    lastUrl: "",
-    watcherTimerId: 0,
-    sigWatcherTimerId: 0,
-    dragging: {
-      active: false,
-      pointerId: null,
-      offsetX: 0,
-      offsetY: 0
-    }
+    phoneFlagsExcludedIsos: []
   };
-
-  // Opt-in now that the widget is superseded: absent means off, not on.
-  function normalizeInlineQuickActionsEnabled(value) {
-    return value === true;
-  }
 
   function normalizePhoneFlagsExcludedIsos(value) {
     if (!Array.isArray(value)) return [];
@@ -4953,24 +4779,20 @@
       .filter((iso) => /^[a-z]{2}$/.test(iso));
   }
 
-  function applyInlineQuickActionsSettings(settings, options = {}) {
+  function applyContactEnhancerSettings(settings) {
     const source = settings && typeof settings === "object" ? settings : null;
     if (source) {
       if (Object.prototype.hasOwnProperty.call(source, "countryPrefix")) {
-        inlineQuickActionsState.countryPrefix = String(source.countryPrefix || DEFAULT_COUNTRY_CODE);
+        contactTemplateState.countryPrefix = String(source.countryPrefix || DEFAULT_COUNTRY_CODE);
       }
-      if (Object.prototype.hasOwnProperty.call(source, "inlineQuickActionsEnabled")) {
-        inlineQuickActionsState.enabled = normalizeInlineQuickActionsEnabled(source.inlineQuickActionsEnabled);
-      }
-
-      const flagSignatureBefore = `${inlineQuickActionsState.phoneFlagsEnabled}|${inlineQuickActionsState.phoneFlagsExcludedIsos.join(",")}`;
+      const flagSignatureBefore = `${contactTemplateState.phoneFlagsEnabled}|${contactTemplateState.phoneFlagsExcludedIsos.join(",")}`;
       if (Object.prototype.hasOwnProperty.call(source, "phoneFlagsEnabled")) {
-        inlineQuickActionsState.phoneFlagsEnabled = source.phoneFlagsEnabled !== false;
+        contactTemplateState.phoneFlagsEnabled = source.phoneFlagsEnabled !== false;
       }
       if (Object.prototype.hasOwnProperty.call(source, "phoneFlagsExcludedIsos")) {
-        inlineQuickActionsState.phoneFlagsExcludedIsos = normalizePhoneFlagsExcludedIsos(source.phoneFlagsExcludedIsos);
+        contactTemplateState.phoneFlagsExcludedIsos = normalizePhoneFlagsExcludedIsos(source.phoneFlagsExcludedIsos);
       }
-      const flagSignatureAfter = `${inlineQuickActionsState.phoneFlagsEnabled}|${inlineQuickActionsState.phoneFlagsExcludedIsos.join(",")}`;
+      const flagSignatureAfter = `${contactTemplateState.phoneFlagsEnabled}|${contactTemplateState.phoneFlagsExcludedIsos.join(",")}`;
       if (flagSignatureBefore !== flagSignatureAfter) {
         hidePhoneFlagTooltip();
         for (const flag of document.querySelectorAll(".cp-phone-flag")) flag.remove();
@@ -4985,44 +4807,7 @@
           scheduleContactEnhancers();
         }
       }
-
-      if (Object.prototype.hasOwnProperty.call(source, "composerTemplateSearchEnabled")) {
-        const nextEnabled = source.composerTemplateSearchEnabled !== false;
-        if (nextEnabled !== composerTemplateSearchState.enabled) {
-          composerTemplateSearchState.enabled = nextEnabled;
-          if (!nextEnabled) removeComposerTemplateSearch();
-          scheduleContactEnhancers();
-        }
-      }
-
-      if (Object.prototype.hasOwnProperty.call(source, "hubspotTemplatesEnabled")) {
-        const nextEnabled = source.hubspotTemplatesEnabled !== false;
-        if (nextEnabled !== hubspotTemplateState.enabled) {
-          hubspotTemplateState.enabled = nextEnabled;
-          // Drop the cache on disable so re-enabling refetches rather than
-          // serving a list from before the toggle.
-          if (!nextEnabled) {
-            hubspotTemplateState.items = [];
-            hubspotTemplateState.fetchedAt = 0;
-            hubspotTemplateState.inFlight = null;
-          } else if (composerTemplateSearchState.kinds.email.picker?.docked) {
-            refreshHubSpotTemplates();
-          }
-          renderComposerTemplateDropdown("email");
-        }
-      }
     }
-    if (options.sync !== false) {
-      syncInlineQuickActionsForCurrentRoute(true);
-    }
-  }
-
-  function normalizeInlineQuickActionsPosition(rawPosition) {
-    if (!rawPosition || typeof rawPosition !== "object") return null;
-    const left = Number(rawPosition.left);
-    const top = Number(rawPosition.top);
-    if (!Number.isFinite(left) || !Number.isFinite(top)) return null;
-    return { left: Math.round(left), top: Math.round(top) };
   }
 
   function normalizeInlineUsageKind(kind) {
@@ -5255,87 +5040,6 @@
     });
   }
 
-  async function loadInlineQuickActionsPosition() {
-    const local = await readStorageArea("local", [INLINE_QUICK_ACTIONS_POSITION_LOCAL_KEY]);
-    inlineQuickActionsState.position = normalizeInlineQuickActionsPosition(local?.[INLINE_QUICK_ACTIONS_POSITION_LOCAL_KEY]);
-  }
-
-  function persistInlineQuickActionsPosition() {
-    if (!inlineQuickActionsState.position) return;
-    try {
-      chrome.storage.local.set({
-        [INLINE_QUICK_ACTIONS_POSITION_LOCAL_KEY]: {
-          left: inlineQuickActionsState.position.left,
-          top: inlineQuickActionsState.position.top
-        }
-      });
-    } catch (_error) {
-      // Ignore storage write failures.
-    }
-  }
-
-  function clampInlineQuickActionsPosition(position, width, height) {
-    const margin = 8;
-    const maxLeft = Math.max(margin, window.innerWidth - width - margin);
-    const maxTop = Math.max(margin, window.innerHeight - height - margin);
-    return {
-      left: Math.min(maxLeft, Math.max(margin, Math.round(position.left))),
-      top: Math.min(maxTop, Math.max(margin, Math.round(position.top)))
-    };
-  }
-
-  function getInlineQuickActionsDefaultPosition(width, height) {
-    const rightMargin = 30;
-    const topGap = 18;
-    const fallbackTop = 72;
-    let navBottom = 0;
-
-    const navCandidates = Array.from(
-      document.querySelectorAll("header, [role='banner'], nav, [data-test-id*='global'], [data-selenium-test*='global']")
-    );
-
-    for (const node of navCandidates) {
-      if (!(node instanceof Element)) continue;
-      if (!isVisible(node)) continue;
-      const rect = node.getBoundingClientRect();
-      if (rect.height <= 0 || rect.height > 140) continue;
-      if (rect.bottom <= 0) continue;
-      if (rect.top > 40) continue;
-      const style = window.getComputedStyle(node);
-      if (style.position !== "fixed" && style.position !== "sticky") continue;
-      navBottom = Math.max(navBottom, Math.round(rect.bottom));
-    }
-
-    const desiredTop = Math.max(fallbackTop, navBottom + topGap, Math.round(window.innerHeight * 0.58) - 100);
-    const desiredLeft = window.innerWidth - width - rightMargin;
-    return clampInlineQuickActionsPosition({ left: desiredLeft, top: desiredTop }, width, height);
-  }
-
-  function applyInlineQuickActionsPosition() {
-    const rootEl = inlineQuickActionsState.rootEl;
-    if (!rootEl) return;
-
-    const rect = rootEl.getBoundingClientRect();
-    const width = Math.max(1, Math.round(rect.width));
-    const height = Math.max(1, Math.round(rect.height));
-
-    if (!inlineQuickActionsState.position) {
-      const anchored = getInlineQuickActionsDefaultPosition(width, height);
-      rootEl.style.left = `${anchored.left}px`;
-      rootEl.style.top = `${anchored.top}px`;
-      rootEl.style.right = "auto";
-      rootEl.style.bottom = "auto";
-      return;
-    }
-
-    const next = clampInlineQuickActionsPosition(inlineQuickActionsState.position, width, height);
-    inlineQuickActionsState.position = next;
-    rootEl.style.left = `${next.left}px`;
-    rootEl.style.top = `${next.top}px`;
-    rootEl.style.right = "auto";
-    rootEl.style.bottom = "auto";
-  }
-
   function getInlineUsageContactKey() {
     const recordId = String(getRecordIdFromPath() || "").replace(/\D/g, "");
     if (!recordId) return "";
@@ -5345,22 +5049,22 @@
   function getInlineTemplateUsageForContact(contactKey) {
     const key = String(contactKey || "").trim();
     if (!key) return null;
-    if (!inlineQuickActionsState.templateUsageByContact[key]) {
-      inlineQuickActionsState.templateUsageByContact[key] = {
+    if (!contactTemplateState.templateUsageByContact[key]) {
+      contactTemplateState.templateUsageByContact[key] = {
         email: Object.create(null),
         whatsapp: Object.create(null)
       };
     }
-    return inlineQuickActionsState.templateUsageByContact[key];
+    return contactTemplateState.templateUsageByContact[key];
   }
 
   function getInlineNoteTemplateUsageForContact(contactKey) {
     const key = String(contactKey || "").trim();
     if (!key) return null;
-    if (!inlineQuickActionsState.noteTemplateUsageByContact[key]) {
-      inlineQuickActionsState.noteTemplateUsageByContact[key] = Object.create(null);
+    if (!contactTemplateState.noteTemplateUsageByContact[key]) {
+      contactTemplateState.noteTemplateUsageByContact[key] = Object.create(null);
     }
-    return inlineQuickActionsState.noteTemplateUsageByContact[key];
+    return contactTemplateState.noteTemplateUsageByContact[key];
   }
 
   function hasInlineTemplateBeenUsed(kind, templateIdInput) {
@@ -5380,8 +5084,8 @@
   }
 
   function persistInlineTemplateUsage() {
-    const payload = normalizeInlineTemplateUsageMap(inlineQuickActionsState.templateUsageByContact);
-    inlineQuickActionsState.templateUsageByContact = payload;
+    const payload = normalizeInlineTemplateUsageMap(contactTemplateState.templateUsageByContact);
+    contactTemplateState.templateUsageByContact = payload;
     try {
       chrome.storage.local.set({ [TEMPLATE_USAGE_LOCAL_KEY]: payload });
     } catch (_error) {
@@ -5431,8 +5135,8 @@
   }
 
   function persistInlineNoteTemplateUsage() {
-    const payload = normalizeInlineNoteTemplateUsageMap(inlineQuickActionsState.noteTemplateUsageByContact);
-    inlineQuickActionsState.noteTemplateUsageByContact = payload;
+    const payload = normalizeInlineNoteTemplateUsageMap(contactTemplateState.noteTemplateUsageByContact);
+    contactTemplateState.noteTemplateUsageByContact = payload;
     try {
       chrome.storage.local.set({ [INLINE_NOTE_TEMPLATE_USAGE_LOCAL_KEY]: payload });
     } catch (_error) {
@@ -5464,7 +5168,7 @@
   function findInlineCloudAuthByOrganizationId(organizationIdInput) {
     const organizationId = cleanText(organizationIdInput || "");
     if (!organizationId) return null;
-    return (inlineQuickActionsState.cloudAuthList || []).find((item) => cleanText(item?.organizationId || "") === organizationId) || null;
+    return (contactTemplateState.cloudAuthList || []).find((item) => cleanText(item?.organizationId || "") === organizationId) || null;
   }
 
   async function trackInlineCloudTemplateUse(template) {
@@ -5589,7 +5293,7 @@
       .filter((template) => !!template.id);
   }
 
-  async function refreshInlineQuickActionsData() {
+  async function refreshContactTemplateData() {
     const local = await readStorageArea("local", [
       EMAIL_TEMPLATES_LOCAL_KEY,
       NOTE_TEMPLATES_LOCAL_KEY,
@@ -5599,10 +5303,8 @@
       CLOUD_AUTH_LIST_LOCAL_KEY,
       CLOUD_AUTH_LOCAL_KEY
     ]);
-    const sync = await readStorageArea("sync", [SETTINGS_KEY]);
-
     const cloudAuthList = normalizeInlineCloudAuthList(local?.[CLOUD_AUTH_LIST_LOCAL_KEY], local?.[CLOUD_AUTH_LOCAL_KEY]);
-    inlineQuickActionsState.cloudAuthList = cloudAuthList;
+    contactTemplateState.cloudAuthList = cloudAuthList;
     const cacheKeys = [];
     for (const auth of cloudAuthList) {
       if (auth?.templatesPaused === true) continue;
@@ -5624,424 +5326,34 @@
       cloudNoteTemplates.push(...normalizeInlineCloudNoteTemplates(cloudCache?.[keys.noteKey], auth.organizationId));
     }
 
-    inlineQuickActionsState.templates.email = mergeInlineTemplates(
+    contactTemplateState.templates.email = mergeInlineTemplates(
       filterInlineTemplates(normalizeInlineEmailTemplates(local?.[EMAIL_TEMPLATES_LOCAL_KEY]), "email"),
       cloudEmailTemplates
     );
-    inlineQuickActionsState.templates.note = mergeInlineTemplates(
+    contactTemplateState.templates.note = mergeInlineTemplates(
       filterInlineTemplates(normalizeInlineNoteTemplates(local?.[NOTE_TEMPLATES_LOCAL_KEY]), "note"),
       cloudNoteTemplates
     );
-    inlineQuickActionsState.templates.whatsapp = mergeInlineTemplates(
+    contactTemplateState.templates.whatsapp = mergeInlineTemplates(
       filterInlineTemplates(normalizeInlineWhatsappTemplates(local?.[WHATSAPP_TEMPLATES_LOCAL_KEY]), "whatsapp"),
       cloudWhatsappTemplates
     );
-    inlineQuickActionsState.templateUsageByContact = normalizeInlineTemplateUsageMap(local?.[TEMPLATE_USAGE_LOCAL_KEY]);
-    inlineQuickActionsState.noteTemplateUsageByContact = normalizeInlineNoteTemplateUsageMap(
+    contactTemplateState.templateUsageByContact = normalizeInlineTemplateUsageMap(local?.[TEMPLATE_USAGE_LOCAL_KEY]);
+    contactTemplateState.noteTemplateUsageByContact = normalizeInlineNoteTemplateUsageMap(
       local?.[INLINE_NOTE_TEMPLATE_USAGE_LOCAL_KEY]
     );
-    applyInlineQuickActionsSettings(sync?.[SETTINGS_KEY], { sync: false });
   }
 
-  function ensureInlineQuickActionsStyles() {
-    if (document.getElementById(INLINE_QUICK_ACTIONS_STYLE_ID)) return;
-    const styleEl = document.createElement("style");
-    styleEl.id = INLINE_QUICK_ACTIONS_STYLE_ID;
-    styleEl.textContent = `
-      #${INLINE_QUICK_ACTIONS_ROOT_ID} {
-        position: fixed;
-        right: 30px;
-        top: calc(58vh - 100px);
-        z-index: 2147483000;
-        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-      }
-
-      #${INLINE_QUICK_ACTIONS_ROOT_ID} .cp-inline-card {
-        width: 296px;
-        min-width: 296px;
-        max-width: 296px;
-        border: 1px solid #d7c8ef;
-        background: #fcfaff;
-        border-radius: 10px;
-        box-shadow: 0 10px 28px rgba(45, 22, 79, 0.16);
-        color: #47386a;
-        overflow: hidden;
-      }
-
-      #${INLINE_QUICK_ACTIONS_ROOT_ID} .cp-inline-head {
-        height: 6px;
-        cursor: grab;
-        user-select: none;
-        background: #ede7f6;
-        border-radius: 10px 10px 0 0;
-      }
-
-      #${INLINE_QUICK_ACTIONS_ROOT_ID}[data-dragging="1"] .cp-inline-head {
-        cursor: grabbing;
-      }
-
-      #${INLINE_QUICK_ACTIONS_ROOT_ID} .cp-inline-actions-row {
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        gap: 6px;
-        padding: 2px 10px 9px;
-        background: #f3ebff;
-        cursor: grab;
-      }
-
-      #${INLINE_QUICK_ACTIONS_ROOT_ID}[data-dragging="1"] .cp-inline-actions-row {
-        cursor: grabbing;
-      }
-
-      #${INLINE_QUICK_ACTIONS_ROOT_ID} .cp-inline-actions-row button {
-        cursor: pointer;
-      }
-
-      #${INLINE_QUICK_ACTIONS_ROOT_ID} .cp-inline-divider {
-        color: #a48dbf;
-        font-size: 12px;
-        line-height: 1;
-      }
-
-      #${INLINE_QUICK_ACTIONS_ROOT_ID} .cp-inline-action-btn {
-        display: inline-flex;
-        align-items: center;
-        justify-content: center;
-        width: 26px;
-        height: 26px;
-        border: 0;
-        border-radius: 7px;
-        background: transparent;
-        color: #5a437d;
-        cursor: pointer;
-        padding: 0;
-      }
-
-      #${INLINE_QUICK_ACTIONS_ROOT_ID} .cp-inline-action-btn svg {
-        width: 16px;
-        height: 16px;
-        stroke: currentColor;
-        fill: none;
-        stroke-width: 2;
-        stroke-linecap: round;
-        stroke-linejoin: round;
-      }
-
-      #${INLINE_QUICK_ACTIONS_ROOT_ID} .cp-inline-action-btn:hover {
-        background: rgba(137, 96, 196, 0.14);
-      }
-
-      #${INLINE_QUICK_ACTIONS_ROOT_ID} .cp-inline-action-btn.active {
-        background: rgba(137, 96, 196, 0.2);
-      }
-
-      #${INLINE_QUICK_ACTIONS_ROOT_ID}[data-busy="1"] .cp-inline-action-btn {
-        opacity: 0.65;
-        cursor: wait;
-      }
-
-      #${INLINE_QUICK_ACTIONS_ROOT_ID} .cp-inline-panel {
-        border-top: 1px solid #e1d2f3;
-        padding: 0 6px 4px 6px;
-        max-height: 220px;
-        overflow: auto;
-        scrollbar-gutter: stable;
-        scrollbar-width: thin;
-        scrollbar-color: rgba(145, 113, 186, 0.52) transparent;
-      }
-
-      #${INLINE_QUICK_ACTIONS_ROOT_ID} .cp-inline-panel::-webkit-scrollbar {
-        width: 7px;
-      }
-
-      #${INLINE_QUICK_ACTIONS_ROOT_ID} .cp-inline-panel::-webkit-scrollbar-track {
-        background: transparent;
-      }
-
-      #${INLINE_QUICK_ACTIONS_ROOT_ID} .cp-inline-panel::-webkit-scrollbar-thumb {
-        background: rgba(145, 113, 186, 0.48);
-        border-radius: 999px;
-      }
-
-      #${INLINE_QUICK_ACTIONS_ROOT_ID} .cp-inline-panel::-webkit-scrollbar-thumb:hover {
-        background: rgba(128, 92, 173, 0.66);
-      }
-
-      #${INLINE_QUICK_ACTIONS_ROOT_ID} .cp-inline-search {
-        padding: 0;
-        margin: 0 0 4px -6px;
-      }
-
-      #${INLINE_QUICK_ACTIONS_ROOT_ID} .cp-inline-search-input {
-        width: 100%;
-        border: 0;
-        border-bottom: 1px solid rgba(123, 99, 161, 0.26);
-        border-radius: 0;
-        background: rgba(255, 255, 255, 0.92);
-        color: #402866;
-        font: inherit;
-        font-size: 12px;
-        line-height: 1.3;
-        padding: 8px 12px;
-        outline: none;
-      }
-
-      #${INLINE_QUICK_ACTIONS_ROOT_ID} .cp-inline-search-input:focus {
-        border-color: rgba(123, 99, 161, 0.48);
-        box-shadow: 0 0 0 3px rgba(137, 96, 196, 0.12);
-      }
-
-      #${INLINE_QUICK_ACTIONS_ROOT_ID} .cp-inline-template-btn {
-        display: flex;
-        align-items: center;
-        justify-content: space-between;
-        gap: 8px;
-        width: 100%;
-        border: 0;
-        border-radius: 7px;
-        background: transparent;
-        color: inherit;
-        text-align: left;
-        font-size: 12px;
-        padding: 4px 6px;
-        cursor: pointer;
-      }
-
-      #${INLINE_QUICK_ACTIONS_ROOT_ID} .cp-inline-template-label {
-        min-width: 0;
-        overflow: hidden;
-        text-overflow: ellipsis;
-        white-space: nowrap;
-      }
-
-      #${INLINE_QUICK_ACTIONS_ROOT_ID} .cp-inline-template-meta {
-        display: inline-flex;
-        align-items: center;
-        gap: 6px;
-        flex-shrink: 0;
-      }
-
-      #${INLINE_QUICK_ACTIONS_ROOT_ID} .cp-inline-template-cloud {
-        font-size: 12px;
-        line-height: 1;
-        color: #7b63a1;
-      }
-
-      #${INLINE_QUICK_ACTIONS_ROOT_ID} .cp-inline-template-check {
-        font-size: 12px;
-        font-weight: 700;
-        color: transparent;
-        flex-shrink: 0;
-      }
-
-      #${INLINE_QUICK_ACTIONS_ROOT_ID} .cp-inline-template-check.is-used {
-        color: #19733d;
-      }
-
-      #${INLINE_QUICK_ACTIONS_ROOT_ID} .cp-inline-template-btn:hover {
-        background: rgba(137, 96, 196, 0.12);
-      }
-
-      #${INLINE_QUICK_ACTIONS_ROOT_ID} .cp-inline-empty {
-        font-size: 12px;
-        color: #88759f;
-        padding: 6px 7px;
-      }
-
-      #${INLINE_QUICK_ACTIONS_ROOT_ID} .cp-inline-status {
-        font-size: 11px;
-        color: #7e6a99;
-        padding: 0 10px 8px;
-        display: none;
-      }
-
-      #${INLINE_QUICK_ACTIONS_ROOT_ID} .cp-inline-status:not(:empty) {
-        display: block;
-        min-height: 16px;
-      }
-
-      #${INLINE_QUICK_ACTIONS_ROOT_ID} .cp-inline-status[data-tone="error"] {
-        color: #af2f2f;
-      }
-
-      #${INLINE_QUICK_ACTIONS_ROOT_ID} .cp-inline-status[data-tone="success"] {
-        color: #19733d;
-      }
-
-      html[data-darkreader-scheme="dark"] #${INLINE_QUICK_ACTIONS_ROOT_ID} .cp-inline-card {
-        background: #33284a !important;
-        border-color: #8f79b6 !important;
-        color: #f2ecfb !important;
-        box-shadow: 0 8px 24px rgba(18, 8, 32, 0.42) !important;
-      }
-
-      html[data-darkreader-scheme="dark"] #${INLINE_QUICK_ACTIONS_ROOT_ID} .cp-inline-head {
-        background: #3a2a55 !important;
-      }
-
-      html[data-darkreader-scheme="dark"] #${INLINE_QUICK_ACTIONS_ROOT_ID} .cp-inline-actions-row {
-        background: #473668 !important;
-      }
-
-      html[data-darkreader-scheme="dark"] #${INLINE_QUICK_ACTIONS_ROOT_ID} .cp-inline-divider {
-        color: #cebce6 !important;
-      }
-
-      html[data-darkreader-scheme="dark"] #${INLINE_QUICK_ACTIONS_ROOT_ID} .cp-inline-action-btn {
-        color: #efe6fb !important;
-      }
-
-      html[data-darkreader-scheme="dark"] #${INLINE_QUICK_ACTIONS_ROOT_ID} .cp-inline-action-btn:hover {
-        background: rgba(179, 145, 226, 0.2) !important;
-      }
-
-      html[data-darkreader-scheme="dark"] #${INLINE_QUICK_ACTIONS_ROOT_ID} .cp-inline-action-btn.active {
-        background: rgba(179, 145, 226, 0.28) !important;
-      }
-
-      html[data-darkreader-scheme="dark"] #${INLINE_QUICK_ACTIONS_ROOT_ID} .cp-inline-panel {
-        border-top-color: #846bab !important;
-        scrollbar-color: rgba(198, 173, 232, 0.42) transparent;
-      }
-
-      html[data-darkreader-scheme="dark"] #${INLINE_QUICK_ACTIONS_ROOT_ID} .cp-inline-search-input {
-        background: rgba(43, 31, 63, 0.92) !important;
-        border-color: rgba(198, 173, 232, 0.26) !important;
-        color: #f2ecfb !important;
-      }
-
-      html[data-darkreader-scheme="dark"] #${INLINE_QUICK_ACTIONS_ROOT_ID} .cp-inline-search-input:focus {
-        border-color: rgba(198, 173, 232, 0.46) !important;
-        box-shadow: 0 0 0 3px rgba(179, 145, 226, 0.14) !important;
-      }
-
-      html[data-darkreader-scheme="dark"] #${INLINE_QUICK_ACTIONS_ROOT_ID} .cp-inline-panel::-webkit-scrollbar-thumb {
-        background: rgba(198, 173, 232, 0.42) !important;
-      }
-
-      html[data-darkreader-scheme="dark"] #${INLINE_QUICK_ACTIONS_ROOT_ID} .cp-inline-panel::-webkit-scrollbar-thumb:hover {
-        background: rgba(198, 173, 232, 0.58) !important;
-      }
-
-      html[data-darkreader-scheme="dark"] #${INLINE_QUICK_ACTIONS_ROOT_ID} .cp-inline-template-btn:hover {
-        background: rgba(179, 145, 226, 0.18) !important;
-      }
-
-      html[data-darkreader-scheme="dark"] #${INLINE_QUICK_ACTIONS_ROOT_ID} .cp-inline-template-cloud {
-        color: #d4c0f0 !important;
-      }
-
-      html[data-darkreader-scheme="dark"] #${INLINE_QUICK_ACTIONS_ROOT_ID} .cp-inline-template-check.is-used {
-        color: #8ee0a6 !important;
-      }
-
-      html[data-darkreader-scheme="dark"] #${INLINE_QUICK_ACTIONS_ROOT_ID} .cp-inline-empty,
-      html[data-darkreader-scheme="dark"] #${INLINE_QUICK_ACTIONS_ROOT_ID} .cp-inline-status {
-        color: #dacdf0 !important;
-      }
-
-    `;
-    document.documentElement.appendChild(styleEl);
-  }
-
-  function inlineActionIcon(kind) {
-    if (kind === "email") {
-      return "<svg viewBox='0 0 24 24' aria-hidden='true'><rect x='3.5' y='6.5' width='17' height='11' rx='2'></rect><path d='M4 8l8 5 8-5'></path></svg>";
-    }
-    if (kind === "note") {
-      return "<svg viewBox='0 0 24 24' aria-hidden='true'><path d='M4 20h4l10-10-4-4L4 16v4z'></path><path d='M13 7l4 4'></path></svg>";
-    }
-    if (kind === "task") {
-      return "<svg viewBox='0 0 24 24' aria-hidden='true'><rect x='4' y='4' width='16' height='16' rx='2'></rect><path d='M8 12l2.5 2.5L16 9'></path></svg>";
-    }
+  function whatsappIcon() {
     return "<svg viewBox='0 0 24 24' aria-hidden='true' style='fill:currentColor;stroke:none'><path d='M12.04 2C6.58 2 2.13 6.45 2.13 11.91c0 1.75.46 3.45 1.32 4.95L2 22l5.25-1.38a9.87 9.87 0 0 0 4.79 1.22h.01c5.46 0 9.91-4.45 9.91-9.91 0-2.65-1.03-5.14-2.9-7.01A9.82 9.82 0 0 0 12.04 2zm0 18.15h-.01a8.2 8.2 0 0 1-4.18-1.15l-.3-.18-3.11.82.83-3.04-.2-.31a8.2 8.2 0 0 1-1.26-4.36c0-4.54 3.7-8.23 8.24-8.23a8.2 8.2 0 0 1 8.23 8.24c0 4.54-3.7 8.25-8.23 8.25zm4.52-6.16c-.25-.12-1.47-.72-1.69-.81-.23-.08-.39-.12-.56.12-.17.25-.64.81-.79.98-.14.17-.29.19-.54.06-.25-.12-1.05-.39-1.99-1.23-.74-.66-1.24-1.47-1.38-1.72-.14-.25-.02-.38.11-.51.11-.11.25-.29.37-.43.12-.14.17-.25.25-.41.08-.17.04-.31-.02-.43-.06-.12-.56-1.35-.77-1.85-.2-.48-.41-.42-.56-.43l-.48-.01c-.17 0-.43.06-.66.31-.23.25-.86.85-.86 2.07 0 1.22.89 2.4 1.01 2.56.12.17 1.75 2.67 4.25 3.74.59.26 1.05.41 1.41.52.59.19 1.13.16 1.56.1.48-.07 1.47-.6 1.68-1.18.21-.58.21-1.07.14-1.18-.06-.11-.22-.17-.47-.29z'></path></svg>";
   }
 
-  function setInlineQuickActionsStatus(message, tone = "") {
-    if (!inlineQuickActionsState.statusEl) return;
-    inlineQuickActionsState.statusEl.textContent = String(message || "");
-    inlineQuickActionsState.statusEl.dataset.tone = tone;
-  }
-
-  function setInlineQuickActionsBusy(busy) {
-    inlineQuickActionsState.busy = !!busy;
-    if (!inlineQuickActionsState.rootEl) return;
-    inlineQuickActionsState.rootEl.dataset.busy = busy ? "1" : "0";
-    renderInlineQuickActionButtons();
-    inlineQuickActionsState.rootEl.querySelectorAll(".cp-inline-template-btn").forEach((button) => {
-      button.disabled = inlineQuickActionsState.busy;
-    });
-  }
-
-  function renderInlineQuickActionButtons() {
-    if (!inlineQuickActionsState.rootEl) return;
-    inlineQuickActionsState.rootEl.querySelectorAll(".cp-inline-action-btn").forEach((button) => {
-      const kind = String(button.getAttribute("data-kind") || "");
-      button.classList.toggle("active", kind === inlineQuickActionsState.activeKind);
-      button.disabled = inlineQuickActionsState.busy;
-    });
-  }
-
-  function renderInlineQuickActionsPanel(kind = "") {
-    if (!inlineQuickActionsState.panelEl) return;
-    inlineQuickActionsState.activeKind = String(kind || "");
-    renderInlineQuickActionButtons();
-
-    if (!inlineQuickActionsState.activeKind) {
-      inlineQuickActionsState.panelEl.hidden = true;
-      inlineQuickActionsState.panelEl.innerHTML = "";
-      return;
-    }
-
-    const templates = inlineQuickActionsState.templates?.[inlineQuickActionsState.activeKind] || [];
-    const query = normalizeSearchText(inlineQuickActionsState.searchQuery || "");
-    const matchingTemplates = query
-      ? templates.filter((template) => searchTextMatchesQuery(template?.name || "", query))
-      : templates;
-    inlineQuickActionsState.panelEl.hidden = false;
-    if (!templates.length) {
-      const label = inlineQuickActionsState.activeKind === "whatsapp" ? "WhatsApp" : inlineQuickActionsState.activeKind[0].toUpperCase() + inlineQuickActionsState.activeKind.slice(1);
-      inlineQuickActionsState.panelEl.innerHTML = `<div class='cp-inline-empty'>No ${escapeHtml(label)} templates.</div>`;
-      return;
-    }
-    if (!matchingTemplates.length) {
-      inlineQuickActionsState.panelEl.innerHTML =
-        `<div class='cp-inline-search'><input type='text' class='cp-inline-search-input' placeholder='Search titles...' autocomplete='off' value='${escapeHtml(
-          inlineQuickActionsState.searchQuery || ""
-        )}'></div>` + "<div class='cp-inline-empty'>No templates match that title.</div>";
-      return;
-    }
-
-    inlineQuickActionsState.panelEl.innerHTML =
-      `<div class='cp-inline-search'><input type='text' class='cp-inline-search-input' placeholder='Search titles...' autocomplete='off' value='${escapeHtml(
-        inlineQuickActionsState.searchQuery || ""
-      )}'></div>` +
-      matchingTemplates
-      .map((template) => {
-        const isUsed = hasInlineTemplateBeenUsed(inlineQuickActionsState.activeKind, template.id);
-        const isCloud = String(template?.source || "").toLowerCase() === "cloud";
-        return (
-          `<button type='button' class='cp-inline-template-btn' data-template-kind='${escapeHtml(
-            inlineQuickActionsState.activeKind
-          )}' data-template-id='${escapeHtml(template.id)}'>` +
-          `<span class='cp-inline-template-label'>${escapeHtml(template.name || "Untitled")}</span>` +
-          "<span class='cp-inline-template-meta'>" +
-          `${isCloud ? "<span class='cp-inline-template-cloud' aria-hidden='true' title='Cloud template'>☁</span>" : ""}` +
-          `<span class='cp-inline-template-check ${isUsed ? "is-used" : ""}' aria-hidden='true'>✓</span>` +
-          "</span>" +
-          "</button>"
-        );
-      })
-      .join("");
-  }
-
-  function isInlineQuickActionsEligiblePage() {
+  function isContactRecordPage() {
     return inferObjectKindFromPath() === "contact" && !!getRecordIdFromPath();
   }
 
   function getInlineContactContextOrThrow() {
-    const context = getActiveTabContext(inlineQuickActionsState.countryPrefix, "");
+    const context = getActiveTabContext(contactTemplateState.countryPrefix, "");
     if (context?.kind !== "contact" || !context?.recordId) {
       throw new Error("Open a HubSpot contact record page first.");
     }
@@ -6057,62 +5369,7 @@
     const bodyText = applyInlineTemplateTokens(template?.body || "", tokens).trim();
     const bodyPlainText = htmlToPlainText(bodyText);
 
-    if (findOpenEmailDialog()) {
-      await applyEmailTemplateOnPage(subject, bodyPlainText, bodyHtml);
-      return;
-    }
-
-    const interactionUrl = buildCurrentContactInteractionUrl("email");
-    if (!interactionUrl) {
-      await openEmailAndApplyTemplateOnPage(subject, bodyPlainText, bodyHtml);
-      return;
-    }
-
-    savePendingInlineEmailApply({
-      recordId: context.recordId,
-      subject,
-      body: bodyPlainText,
-      bodyHtml,
-      createdAt: Date.now()
-    });
-    location.assign(interactionUrl);
-  }
-
-  async function runPendingInlineEmailApplyIfNeeded() {
-    if (inlineQuickActionsState.pendingEmailApplyRunning) return;
-
-    const pending = loadPendingInlineEmailApply();
-    if (!pending) return;
-
-    const currentRecordId = getRecordIdFromPath();
-    if (!currentRecordId || String(pending.recordId || "") !== String(currentRecordId)) {
-      clearPendingInlineEmailApply();
-      return;
-    }
-
-    if (Date.now() - Number(pending.createdAt || 0) > 2 * 60 * 1000) {
-      clearPendingInlineEmailApply();
-      return;
-    }
-
-    inlineQuickActionsState.pendingEmailApplyRunning = true;
-    try {
-      for (let attempt = 0; attempt < TIMING.emailComposerOpenAttempts + 4; attempt += 1) {
-        if (findOpenEmailDialog()) break;
-        await sleep(TIMING.emailComposerOpenDelayMs);
-      }
-
-      if (findOpenEmailDialog()) {
-        await applyEmailTemplateOnPage(String(pending.subject || ""), String(pending.body || ""), String(pending.bodyHtml || ""));
-      } else {
-        await openEmailAndApplyTemplateOnPage(String(pending.subject || ""), String(pending.body || ""), String(pending.bodyHtml || ""));
-      }
-      clearPendingInlineEmailApply();
-    } catch (_error) {
-      clearPendingInlineEmailApply();
-    } finally {
-      inlineQuickActionsState.pendingEmailApplyRunning = false;
-    }
+    await applyEmailTemplateOnPage(subject, bodyPlainText, bodyHtml);
   }
 
   async function applyInlineNoteTemplate(template) {
@@ -6126,59 +5383,9 @@
     // fields, and would otherwise dump the whole body into the subject.
     if (applyTemplateToOpenTaskComposer(template, filledBodyHtml, noteBody)) return;
 
-    const existingEditor = findNoteEditor();
-    if (existingEditor && getNoteComposerRoot(existingEditor)) {
-      await createNoteOnPage(noteBody, filledBodyHtml);
-      return;
-    }
-
-    const interactionUrl = buildCurrentContactInteractionUrl("note");
-    if (!interactionUrl) {
-      await createNoteOnPage(noteBody, filledBodyHtml);
-      return;
-    }
-
-    savePendingInlineNoteApply({
-      recordId: context.recordId,
-      noteBody,
-      noteHtml: filledBodyHtml,
-      createdAt: Date.now()
-    });
-    location.assign(interactionUrl);
-  }
-
-  async function runPendingInlineNoteApplyIfNeeded() {
-    if (inlineQuickActionsState.pendingNoteApplyRunning) return;
-
-    const pending = loadPendingInlineNoteApply();
-    if (!pending) return;
-
-    const currentRecordId = getRecordIdFromPath();
-    if (!currentRecordId || String(pending.recordId || "") !== String(currentRecordId)) {
-      clearPendingInlineNoteApply();
-      return;
-    }
-
-    if (Date.now() - Number(pending.createdAt || 0) > 2 * 60 * 1000) {
-      clearPendingInlineNoteApply();
-      return;
-    }
-
-    inlineQuickActionsState.pendingNoteApplyRunning = true;
-    try {
-      for (let attempt = 0; attempt < TIMING.noteComposerOpenAttempts + 4; attempt += 1) {
-        const editor = findNoteEditor();
-        if (editor && getNoteComposerRoot(editor)) break;
-        await sleep(TIMING.noteComposerOpenDelayMs);
-      }
-
-      await createNoteOnPage(String(pending.noteBody || ""), String(pending.noteHtml || ""));
-      clearPendingInlineNoteApply();
-    } catch (_error) {
-      clearPendingInlineNoteApply();
-    } finally {
-      inlineQuickActionsState.pendingNoteApplyRunning = false;
-    }
+    const editor = findNoteEditor();
+    if (!editor || !getNoteComposerRoot(editor)) throw new Error("Open a HubSpot note composer first.");
+    await createNoteOnPage(noteBody, filledBodyHtml);
   }
 
   async function applyInlineWhatsappTemplate(template) {
@@ -6186,7 +5393,7 @@
     const tokens = buildInlineTemplateTokens(context);
     const phoneDigits =
       String(context?.contact?.phoneDigits || "").replace(/\D/g, "") ||
-      String(normalizePhone(context?.contact?.values?.phone || "", inlineQuickActionsState.countryPrefix) || "").replace(/\D/g, "");
+      String(normalizePhone(context?.contact?.values?.phone || "", contactTemplateState.countryPrefix) || "").replace(/\D/g, "");
     if (!phoneDigits) throw new Error("No phone number found on this contact.");
 
     const filledMessage = applyInlineTemplateTokens(template?.body || "", tokens).trim();
@@ -6227,39 +5434,6 @@
     if (!(root instanceof Element) || !isVisible(root)) return false;
     if (root.getAttribute("role") === "dialog") return isTaskComposerDialog(root);
     return getTaskComposerMarkerScore(root) >= 36;
-  }
-
-  function getTaskContextText(element) {
-    const scopes = [
-      element?.closest("[role='dialog']"),
-      element?.closest("[role='menu']"),
-      element?.closest("[role='toolbar']"),
-      element?.closest("[role='tablist']"),
-      element?.closest("section"),
-      element?.closest("article"),
-      element?.closest("main"),
-      element?.parentElement
-    ].filter(Boolean);
-
-    const seen = new Set();
-    const parts = [];
-    for (const scope of scopes) {
-      if (!(scope instanceof Element)) continue;
-      if (seen.has(scope)) continue;
-      seen.add(scope);
-      parts.push(elementText(scope).toLowerCase());
-    }
-    return cleanText(parts.join(" ")).toLowerCase();
-  }
-
-  function hasTaskComposerOpen() {
-    const dialogOpen = Array.from(document.querySelectorAll("[role='dialog']")).some((dialog) => isTaskComposerDialog(dialog));
-    if (dialogOpen) return true;
-
-    const candidateRoots = Array.from(
-      document.querySelectorAll("form, section, article, [role='region'], [data-test-id], [data-testid], [data-selenium-test]")
-    );
-    return candidateRoots.some((root) => isTaskComposerRoot(root));
   }
 
   function findTaskComposerRoot() {
@@ -6388,464 +5562,6 @@
     return true;
   }
 
-  function focusTaskTitleField() {
-    const composerRoot = findTaskComposerRoot();
-    if (!(composerRoot instanceof Element)) return false;
-    const field = findTaskTitleField(composerRoot);
-    if (!(field instanceof Element)) return false;
-
-    field.focus();
-    if (field instanceof HTMLInputElement || field instanceof HTMLTextAreaElement) {
-      try {
-        field.setSelectionRange(field.value.length, field.value.length);
-      } catch (_error) {
-        // Ignore selection failures.
-      }
-    }
-    return true;
-  }
-
-  function getCreateTaskTriggers() {
-    const candidates = Array.from(document.querySelectorAll("button, [role='button'], a")).filter(
-      (el) => isVisible(el) && !isInlineQuickActionsElement(el)
-    );
-    const matches = [];
-
-    for (const el of candidates) {
-      const text = elementText(el).toLowerCase();
-      const aria = cleanText(el.getAttribute?.("aria-label") || "").toLowerCase();
-      const testId = cleanText(
-        el.getAttribute?.("data-test-id") || el.getAttribute?.("data-testid") || el.getAttribute?.("data-selenium-test") || ""
-      ).toLowerCase();
-      const title = cleanText(el.getAttribute?.("title") || "").toLowerCase();
-      const hint = `${text} ${aria} ${testId} ${title}`.trim();
-      const compactHint = hint.replace(/\s+/g, " ").trim();
-      if (!compactHint) continue;
-      const taskContextText = getTaskContextText(el);
-      const opensTaskComposer =
-        compactHint.includes("create task") ||
-        compactHint.includes("create tasks") ||
-        compactHint.includes("add task") ||
-        compactHint.includes("new task") ||
-        compactHint.includes("task title") ||
-        compactHint.includes("to-do") ||
-        compactHint.includes("todo") ||
-        compactHint.includes("log task") ||
-        ((compactHint === "add" || compactHint === "+ add" || compactHint === "create" || compactHint === "+") &&
-          (taskContextText.includes("tasks") || taskContextText.includes("task") || taskContextText.includes("to-do")));
-      if (!opensTaskComposer) continue;
-
-      let score = 0;
-      if (compactHint.includes("create task")) score += 46;
-      if (compactHint.includes("create tasks")) score += 46;
-      if (compactHint.includes("add task")) score += 32;
-      if (compactHint.includes("new task")) score += 32;
-      if (compactHint.includes("log task")) score += 24;
-      if (compactHint.includes("task title")) score += 20;
-      if (compactHint.includes("to-do") || compactHint.includes("todo")) score += 12;
-      if (compactHint === "add" || compactHint === "+ add" || compactHint === "+") score += 26;
-      if (compactHint === "create") score += 18;
-      if (compactHint.includes("mark") && compactHint.includes("complete")) score -= 24;
-      if (compactHint.includes("assigned")) score -= 18;
-      if (compactHint.includes("filter")) score -= 22;
-      if (compactHint.includes("recent")) score -= 14;
-      if (compactHint.includes("close")) score -= 40;
-
-      const classText = String(el.className || "").toLowerCase();
-      if (classText.includes("private-button")) score += 3;
-      if (classText.includes("primary")) score += 2;
-      if (classText.includes("add")) score += 3;
-
-      const root = el.closest("[role='dialog'], [role='menu'], [role='toolbar'], [role='tablist'], section, article, li, div") || el;
-      const rootText = elementText(root).toLowerCase();
-      if (rootText.includes("task is incomplete")) score -= 28;
-      if (rootText.includes("activity")) score += 4;
-      if (rootText.includes("notes") && rootText.includes("emails")) score += 8;
-      if (rootText.includes("about this contact")) score -= 28;
-      if (el.getAttribute("role") === "tab") score -= 40;
-      if (taskContextText.includes("tasks")) score += 12;
-      if (taskContextText.includes("to-do") || taskContextText.includes("todo")) score += 8;
-      if (taskContextText.includes("activity date")) score += 4;
-      if (taskContextText.includes("associated with")) score -= 10;
-
-      if (score < 14) continue;
-      matches.push({ el, score });
-    }
-
-    return matches.sort((a, b) => b.score - a.score).map((item) => item.el);
-  }
-
-  async function openTaskComposerOnPage() {
-    if (hasTaskComposerOpen()) {
-      focusTaskTitleField();
-      return { ok: true };
-    }
-
-    for (let attempt = 0; attempt < 8; attempt += 1) {
-      if (attempt === 0 || attempt % 3 === 0) clickActivitiesTab();
-      if (attempt === 1 || attempt % 3 === 1) clickTaskActivityTab();
-      await sleep(180);
-      const triggers = getCreateTaskTriggers();
-      for (const trigger of triggers.slice(0, 4)) {
-        trigger.click();
-        await sleep(180);
-        if (hasTaskComposerOpen()) {
-          focusTaskTitleField();
-          return { ok: true };
-        }
-      }
-      await sleep(220);
-    }
-
-    throw new Error("Could not open the HubSpot task composer.");
-  }
-
-  async function openInlineTaskComposer() {
-    if (hasTaskComposerOpen()) {
-      focusTaskTitleField();
-      return;
-    }
-
-    const interactionUrl = buildCurrentContactInteractionUrl("task");
-    if (!interactionUrl) {
-      await openTaskComposerOnPage();
-      return;
-    }
-
-    const context = getInlineContactContextOrThrow();
-    savePendingInlineTaskOpen({
-      recordId: context.recordId,
-      createdAt: Date.now()
-    });
-    location.assign(interactionUrl);
-  }
-
-  async function runPendingInlineTaskOpenIfNeeded() {
-    if (inlineQuickActionsState.pendingTaskOpenRunning) return;
-
-    const pending = loadPendingInlineTaskOpen();
-    if (!pending) return;
-
-    const currentRecordId = getRecordIdFromPath();
-    if (!currentRecordId || String(pending.recordId || "") !== String(currentRecordId)) {
-      clearPendingInlineTaskOpen();
-      return;
-    }
-
-    if (Date.now() - Number(pending.createdAt || 0) > 2 * 60 * 1000) {
-      clearPendingInlineTaskOpen();
-      return;
-    }
-
-    inlineQuickActionsState.pendingTaskOpenRunning = true;
-    try {
-      for (let attempt = 0; attempt < 12; attempt += 1) {
-        if (hasTaskComposerOpen()) break;
-        await sleep(180);
-      }
-
-      if (!hasTaskComposerOpen()) {
-        await openTaskComposerOnPage();
-      } else {
-        focusTaskTitleField();
-      }
-      clearPendingInlineTaskOpen();
-    } catch (_error) {
-      clearPendingInlineTaskOpen();
-    } finally {
-      inlineQuickActionsState.pendingTaskOpenRunning = false;
-    }
-  }
-
-  async function handleInlineTemplateSelection(kind, templateId) {
-    if (inlineQuickActionsState.busy) return;
-    const templates = inlineQuickActionsState.templates?.[kind] || [];
-    const template = templates.find((item) => String(item?.id || "") === String(templateId || ""));
-    if (!template) {
-      setInlineQuickActionsStatus("Template not found.", "error");
-      return;
-    }
-
-    setInlineQuickActionsBusy(true);
-    setInlineQuickActionsStatus("Working...");
-    try {
-      if (kind === "email") {
-        await applyInlineEmailTemplate(template);
-        markInlineTemplateUsed("email", template.id);
-        void trackInlineCloudTemplateUse(template);
-        setInlineQuickActionsStatus("");
-        renderInlineQuickActionsPanel("email");
-      } else if (kind === "note") {
-        await applyInlineNoteTemplate(template);
-        markInlineTemplateUsed("note", template.id);
-        void trackInlineCloudTemplateUse(template);
-        setInlineQuickActionsStatus("");
-        renderInlineQuickActionsPanel("note");
-      } else if (kind === "whatsapp") {
-        await applyInlineWhatsappTemplate(template);
-        markInlineTemplateUsed("whatsapp", template.id);
-        void trackInlineCloudTemplateUse(template);
-        setInlineQuickActionsStatus("");
-        renderInlineQuickActionsPanel("whatsapp");
-      }
-    } catch (error) {
-      const reason = cleanText(String(error?.message || error || "Action failed."));
-      setInlineQuickActionsStatus(reason || "Action failed.", "error");
-    } finally {
-      setInlineQuickActionsBusy(false);
-    }
-  }
-
-  async function handleInlineActionButtonToggle(kind) {
-    if (inlineQuickActionsState.busy) return;
-    const selectedKind = String(kind || "");
-    if (!selectedKind) return;
-
-    if (selectedKind === "task") {
-      setInlineQuickActionsBusy(true);
-      setInlineQuickActionsStatus("");
-      try {
-        await openInlineTaskComposer();
-        renderInlineQuickActionsPanel("");
-        setInlineQuickActionsStatus("");
-      } catch (error) {
-        const reason = cleanText(String(error?.message || error || "Could not open task composer."));
-        setInlineQuickActionsStatus(reason || "Could not open task composer.", "error");
-      } finally {
-        setInlineQuickActionsBusy(false);
-      }
-      return;
-    }
-
-    // With the in-composer template search active, the widget's email and
-    // note buttons just open the matching composer, like HubSpot's own
-    // actions; the search row takes over from there. With it disabled, fall
-    // through to the old template panels so templates stay reachable.
-    if ((selectedKind === "email" || selectedKind === "note") && composerTemplateSearchState.enabled) {
-      setInlineQuickActionsBusy(true);
-      setInlineQuickActionsStatus("");
-      try {
-        renderInlineQuickActionsPanel("");
-        if (!COMPOSER_SEARCH_KINDS[selectedKind].findDialog()) {
-          // Same route HubSpot's own actions use: the ?interaction=<kind>
-          // record URL opens the composer on load. DOM-click automation is
-          // only the fallback when the route context can't be built.
-          const interactionUrl = buildCurrentContactInteractionUrl(selectedKind);
-          if (interactionUrl) {
-            location.assign(interactionUrl);
-            return;
-          }
-          if (selectedKind === "email") await openEmailComposerOnPage();
-          else await openNoteComposerUiOnPage();
-          if (!COMPOSER_SEARCH_KINDS[selectedKind].findDialog()) {
-            throw new Error(`Could not open the ${selectedKind} composer.`);
-          }
-        }
-        setInlineQuickActionsStatus("");
-      } catch (error) {
-        const reason = cleanText(String(error?.message || error || "Could not open the composer."));
-        setInlineQuickActionsStatus(reason || "Could not open the composer.", "error");
-      } finally {
-        setInlineQuickActionsBusy(false);
-      }
-      return;
-    }
-
-    await refreshInlineQuickActionsData();
-
-    if (inlineQuickActionsState.activeKind === selectedKind) {
-      inlineQuickActionsState.searchQuery = "";
-      renderInlineQuickActionsPanel("");
-      return;
-    }
-    inlineQuickActionsState.searchQuery = "";
-    renderInlineQuickActionsPanel(selectedKind);
-  }
-
-  function handleInlineRootClick(event) {
-    const target = event.target instanceof Element ? event.target : null;
-    if (!target) return;
-
-    const actionButton = target.closest(".cp-inline-action-btn");
-    if (actionButton) {
-      const kind = String(actionButton.getAttribute("data-kind") || "");
-      void handleInlineActionButtonToggle(kind);
-      return;
-    }
-
-    const templateButton = target.closest(".cp-inline-template-btn");
-    if (templateButton) {
-      const kind = String(templateButton.getAttribute("data-template-kind") || "");
-      const templateId = String(templateButton.getAttribute("data-template-id") || "");
-      if (!kind || !templateId) return;
-      void handleInlineTemplateSelection(kind, templateId);
-    }
-  }
-
-  function handleInlineRootInput(event) {
-    const target = event.target;
-    if (!(target instanceof HTMLInputElement)) return;
-    if (!target.classList.contains("cp-inline-search-input")) return;
-
-    const nextQuery = String(target.value || "");
-    const caret = Number.isFinite(target.selectionStart) ? target.selectionStart : nextQuery.length;
-    inlineQuickActionsState.searchQuery = nextQuery;
-    if (inlineQuickActionsState.activeKind) {
-      renderInlineQuickActionsPanel(inlineQuickActionsState.activeKind);
-      const nextInput = inlineQuickActionsState.panelEl?.querySelector(".cp-inline-search-input");
-      if (nextInput instanceof HTMLInputElement) {
-        nextInput.focus();
-        const nextCaret = Math.min(caret, nextInput.value.length);
-        nextInput.setSelectionRange(nextCaret, nextCaret);
-      }
-    }
-  }
-
-  function finishInlineQuickActionsDrag() {
-    if (!inlineQuickActionsState.dragging.active) return;
-    inlineQuickActionsState.dragging.active = false;
-    inlineQuickActionsState.dragging.pointerId = null;
-    if (inlineQuickActionsState.rootEl) {
-      inlineQuickActionsState.rootEl.dataset.dragging = "0";
-    }
-    document.removeEventListener("pointermove", handleInlineQuickActionsPointerMove, true);
-    document.removeEventListener("pointerup", handleInlineQuickActionsPointerUp, true);
-    document.removeEventListener("pointercancel", handleInlineQuickActionsPointerUp, true);
-    persistInlineQuickActionsPosition();
-  }
-
-  function handleInlineQuickActionsPointerMove(event) {
-    if (!inlineQuickActionsState.dragging.active || !inlineQuickActionsState.rootEl) return;
-    if (inlineQuickActionsState.dragging.pointerId !== null && event.pointerId !== inlineQuickActionsState.dragging.pointerId) return;
-
-    const rootEl = inlineQuickActionsState.rootEl;
-    const rect = rootEl.getBoundingClientRect();
-    const next = clampInlineQuickActionsPosition(
-      {
-        left: event.clientX - inlineQuickActionsState.dragging.offsetX,
-        top: event.clientY - inlineQuickActionsState.dragging.offsetY
-      },
-      Math.max(1, Math.round(rect.width)),
-      Math.max(1, Math.round(rect.height))
-    );
-
-    inlineQuickActionsState.position = next;
-    rootEl.style.left = `${next.left}px`;
-    rootEl.style.top = `${next.top}px`;
-    rootEl.style.right = "auto";
-    rootEl.style.bottom = "auto";
-    event.preventDefault();
-  }
-
-  function handleInlineQuickActionsPointerUp(event) {
-    if (inlineQuickActionsState.dragging.pointerId !== null && event.pointerId !== inlineQuickActionsState.dragging.pointerId) return;
-    finishInlineQuickActionsDrag();
-  }
-
-  function handleInlineQuickActionsPointerDown(event) {
-    if (inlineQuickActionsState.busy) return;
-    if (event.button !== 0) return;
-    const target = event.target instanceof Element ? event.target : null;
-    if (!target) return;
-    const handle = target.closest(".cp-inline-head") ||
-      (target.closest(".cp-inline-actions-row") && !target.closest("button, [role='button']") ? target.closest(".cp-inline-actions-row") : null);
-    if (!handle || !inlineQuickActionsState.rootEl) return;
-
-    const rect = inlineQuickActionsState.rootEl.getBoundingClientRect();
-    inlineQuickActionsState.dragging.active = true;
-    inlineQuickActionsState.dragging.pointerId = event.pointerId;
-    inlineQuickActionsState.dragging.offsetX = event.clientX - rect.left;
-    inlineQuickActionsState.dragging.offsetY = event.clientY - rect.top;
-    inlineQuickActionsState.rootEl.dataset.dragging = "1";
-
-    document.addEventListener("pointermove", handleInlineQuickActionsPointerMove, true);
-    document.addEventListener("pointerup", handleInlineQuickActionsPointerUp, true);
-    document.addEventListener("pointercancel", handleInlineQuickActionsPointerUp, true);
-    event.preventDefault();
-  }
-
-  function closeInlinePanelWhenClickingOutside(event) {
-    if (!inlineQuickActionsState.rootEl) return;
-    if (!inlineQuickActionsState.activeKind) return;
-    const target = event.target instanceof Node ? event.target : null;
-    if (!target) return;
-    if (inlineQuickActionsState.rootEl.contains(target)) return;
-    renderInlineQuickActionsPanel("");
-  }
-
-  function mountInlineQuickActions() {
-    if (inlineQuickActionsState.rootEl || !document.body) return;
-    ensureInlineQuickActionsStyles();
-
-    const rootEl = document.createElement("div");
-    rootEl.id = INLINE_QUICK_ACTIONS_ROOT_ID;
-    rootEl.dataset.busy = "0";
-    rootEl.dataset.dragging = "0";
-    rootEl.innerHTML = `
-      <div class='cp-inline-card'>
-        <div class='cp-inline-head'></div>
-        <div class='cp-inline-actions-row'>
-          <button type='button' class='cp-inline-action-btn' data-kind='whatsapp' aria-label='WhatsApp templates' title='WhatsApp templates'>${inlineActionIcon("whatsapp")}</button>
-          <span class='cp-inline-divider'>|</span>
-          <button type='button' class='cp-inline-action-btn' data-kind='email' aria-label='${composerTemplateSearchState.enabled ? "Write email" : "Email templates"}' title='${composerTemplateSearchState.enabled ? "Write email" : "Email templates"}'>${inlineActionIcon("email")}</button>
-          <span class='cp-inline-divider'>|</span>
-          <button type='button' class='cp-inline-action-btn' data-kind='note' aria-label='${composerTemplateSearchState.enabled ? "Write note" : "Note templates"}' title='${composerTemplateSearchState.enabled ? "Write note" : "Note templates"}'>${inlineActionIcon("note")}</button>
-          <span class='cp-inline-divider'>|</span>
-          <button type='button' class='cp-inline-action-btn' data-kind='task' aria-label='Create task' title='Create task'>${inlineActionIcon("task")}</button>
-        </div>
-        <div class='cp-inline-panel' hidden></div>
-        <div class='cp-inline-status' aria-live='polite'></div>
-      </div>
-    `;
-
-    rootEl.addEventListener("click", handleInlineRootClick);
-    rootEl.addEventListener("input", handleInlineRootInput);
-    rootEl.addEventListener("pointerdown", handleInlineQuickActionsPointerDown);
-    document.body.appendChild(rootEl);
-    inlineQuickActionsState.rootEl = rootEl;
-    inlineQuickActionsState.panelEl = rootEl.querySelector(".cp-inline-panel");
-    inlineQuickActionsState.statusEl = rootEl.querySelector(".cp-inline-status");
-    applyInlineQuickActionsPosition();
-    renderInlineQuickActionButtons();
-  }
-
-  function unmountInlineQuickActions() {
-    if (!inlineQuickActionsState.rootEl) return;
-    finishInlineQuickActionsDrag();
-    inlineQuickActionsState.rootEl.removeEventListener("click", handleInlineRootClick);
-    inlineQuickActionsState.rootEl.removeEventListener("input", handleInlineRootInput);
-    inlineQuickActionsState.rootEl.removeEventListener("pointerdown", handleInlineQuickActionsPointerDown);
-    inlineQuickActionsState.rootEl.remove();
-    inlineQuickActionsState.rootEl = null;
-    inlineQuickActionsState.panelEl = null;
-    inlineQuickActionsState.statusEl = null;
-    inlineQuickActionsState.activeKind = "";
-    inlineQuickActionsState.searchQuery = "";
-    inlineQuickActionsState.busy = false;
-  }
-
-  function syncInlineQuickActionsForCurrentRoute(force = false) {
-    const href = String(location.href || "");
-    if (!force && href === inlineQuickActionsState.lastUrl) return;
-    inlineQuickActionsState.lastUrl = href;
-
-    if (!inlineQuickActionsState.enabled || !isInlineQuickActionsEligiblePage()) {
-      unmountInlineQuickActions();
-      return;
-    }
-
-    mountInlineQuickActions();
-    setInlineQuickActionsStatus("");
-    void refreshInlineQuickActionsData();
-    void runPendingInlineEmailApplyIfNeeded();
-    void runPendingInlineNoteApplyIfNeeded();
-    void runPendingInlineTaskOpenIfNeeded();
-  }
-
-  function handleInlineQuickActionsViewportResize() {
-    applyInlineQuickActionsPosition();
-  }
-
   function findSignatureInEmailComposer() {
     const dialog = findOpenEmailDialog();
     if (!dialog) return null;
@@ -6961,41 +5677,12 @@
     btn.setAttribute("aria-label", "Remove signature");
   }
 
-  function startInlineQuickActionsWatcher() {
-    if (inlineQuickActionsState.watcherTimerId) return;
-    inlineQuickActionsState.lastUrl = "";
-    void Promise.all([refreshInlineQuickActionsData(), loadInlineQuickActionsPosition()]).then(() => {
-      syncInlineQuickActionsForCurrentRoute(true);
-    });
-    inlineQuickActionsState.watcherTimerId = window.setInterval(
-      syncInlineQuickActionsForCurrentRoute,
-      INLINE_QUICK_ACTIONS_CHECK_INTERVAL_MS
-    );
-    inlineQuickActionsState.sigWatcherTimerId = window.setInterval(
-      syncSignatureToggleIfNeeded,
-      INLINE_QUICK_ACTIONS_CHECK_INTERVAL_MS
-    );
-    document.addEventListener("pointerdown", closeInlinePanelWhenClickingOutside, true);
-    window.addEventListener("resize", handleInlineQuickActionsViewportResize);
-  }
-
-  function stopInlineQuickActionsWatcher() {
-    if (inlineQuickActionsState.watcherTimerId) {
-      window.clearInterval(inlineQuickActionsState.watcherTimerId);
-      inlineQuickActionsState.watcherTimerId = 0;
-    }
-    if (inlineQuickActionsState.sigWatcherTimerId) {
-      window.clearInterval(inlineQuickActionsState.sigWatcherTimerId);
-      inlineQuickActionsState.sigWatcherTimerId = 0;
-    }
-  }
-
   applyHubSpotThemeFromSettingsStorage();
   subscribeHubSpotThemeChanges();
   loadSidebarDeclutterLocalState();
   startContactIndexEnhancerWatcher();
-  startInlineQuickActionsWatcher();
-  window.addEventListener("pagehide", stopInlineQuickActionsWatcher);
+  const signatureWatcher = window.setInterval(syncSignatureToggleIfNeeded, 900);
+  window.addEventListener("pagehide", () => window.clearInterval(signatureWatcher));
 
   chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
     if (!message || !message.type) return;

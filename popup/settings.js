@@ -254,19 +254,6 @@
     });
   }
 
-  function openContactWidgetInfoDialog() {
-    if (!dom.contactWidgetInfoOverlay) return;
-    dom.contactWidgetInfoOverlay.classList.add("open");
-  }
-
-  function closeContactWidgetInfoDialog() {
-    if (!dom.contactWidgetInfoOverlay) return;
-    App.blurFocusedElementWithin(dom.contactWidgetInfoOverlay);
-    requestAnimationFrame(() => {
-      dom.contactWidgetInfoOverlay.classList.remove("open");
-    });
-  }
-
   function openCountryCodeInfoDialog() {
     if (!dom.countryCodeInfoOverlay) return;
     dom.countryCodeInfoOverlay.classList.add("open");
@@ -545,11 +532,6 @@
         queueSettingsAutosave({ immediate: true });
       });
     }
-    if (dom.inlineQuickActionsEnabledInput) {
-      dom.inlineQuickActionsEnabledInput.addEventListener("change", () => {
-        queueSettingsAutosave({ immediate: true });
-      });
-    }
     if (dom.phoneFlagsEnabledInput) {
       dom.phoneFlagsEnabledInput.addEventListener("change", () => {
         syncPhoneFlagsExcludeFieldVisibility();
@@ -558,17 +540,6 @@
     }
     if (dom.sidebarDeclutterEnabledInput) {
       dom.sidebarDeclutterEnabledInput.addEventListener("change", () => {
-        queueSettingsAutosave({ immediate: true });
-      });
-    }
-    if (dom.composerTemplateSearchEnabledInput) {
-      dom.composerTemplateSearchEnabledInput.addEventListener("change", () => {
-        syncHubspotTemplatesSubFieldVisibility();
-        queueSettingsAutosave({ immediate: true });
-      });
-    }
-    if (dom.hubspotTemplatesEnabledInput) {
-      dom.hubspotTemplatesEnabledInput.addEventListener("change", () => {
         queueSettingsAutosave({ immediate: true });
       });
     }
@@ -798,14 +769,6 @@
     return `<img class='${className}' src='vendor/flags/${App.escapeHtml(iso)}.svg' alt='' aria-hidden='true' />`;
   }
 
-  // The HubSpot-templates option only works through the composer search bar,
-  // so it hides while the bar is off (its saved value is kept).
-  function syncHubspotTemplatesSubFieldVisibility() {
-    if (!dom.hubspotTemplatesSubField) return;
-    const enabled = dom.composerTemplateSearchEnabledInput ? dom.composerTemplateSearchEnabledInput.checked : true;
-    dom.hubspotTemplatesSubField.hidden = !enabled;
-  }
-
   function syncPhoneFlagsExcludeFieldVisibility() {
     if (!dom.phoneFlagsExcludeField) return;
     const enabled = dom.phoneFlagsEnabledInput ? dom.phoneFlagsEnabledInput.checked : true;
@@ -955,16 +918,9 @@
         .replace(/\s+/g, " ")
         .trim(),
       defaultLaunchMode: App.normalizeLaunchMode(state.settings.defaultLaunchMode),
-      inlineQuickActionsEnabled: dom.inlineQuickActionsEnabledInput
-        ? dom.inlineQuickActionsEnabledInput.checked
-        : true,
       phoneFlagsEnabled: dom.phoneFlagsEnabledInput ? dom.phoneFlagsEnabledInput.checked : true,
       phoneFlagsExcludedIsos: getPhoneFlagsExcludedIsos(),
       sidebarDeclutterEnabled: dom.sidebarDeclutterEnabledInput ? dom.sidebarDeclutterEnabledInput.checked : true,
-      composerTemplateSearchEnabled: dom.composerTemplateSearchEnabledInput
-        ? dom.composerTemplateSearchEnabledInput.checked
-        : true,
-      hubspotTemplatesEnabled: dom.hubspotTemplatesEnabledInput ? dom.hubspotTemplatesEnabledInput.checked : true,
       visibleColumns,
       columnWidths: App.normalizeColumnWidths(state.settings.columnWidths),
       columnOrder: App.normalizeColumnOrder(state.settings.columnOrder)
@@ -976,23 +932,13 @@
     if (dom.messageTemplateInput) dom.messageTemplateInput.value = "";
     if (dom.noteTemplateInput) dom.noteTemplateInput.value = "";
     if (dom.rowFilterInput) dom.rowFilterInput.value = state.settings.rowFilterWord || "";
-    if (dom.inlineQuickActionsEnabledInput) {
-      dom.inlineQuickActionsEnabledInput.checked = state.settings.inlineQuickActionsEnabled === true;
-    }
     if (dom.phoneFlagsEnabledInput) {
       dom.phoneFlagsEnabledInput.checked = state.settings.phoneFlagsEnabled !== false;
     }
     if (dom.sidebarDeclutterEnabledInput) {
       dom.sidebarDeclutterEnabledInput.checked = state.settings.sidebarDeclutterEnabled !== false;
     }
-    if (dom.composerTemplateSearchEnabledInput) {
-      dom.composerTemplateSearchEnabledInput.checked = state.settings.composerTemplateSearchEnabled !== false;
-    }
-    if (dom.hubspotTemplatesEnabledInput) {
-      dom.hubspotTemplatesEnabledInput.checked = state.settings.hubspotTemplatesEnabled !== false;
-    }
     syncPhoneFlagsExcludeFieldVisibility();
-    syncHubspotTemplatesSubFieldVisibility();
     renderPhoneFlagsExcludedChips();
     bindPhoneFlagsExcludeControls();
     if (dom.openContactsInBackgroundInput) {
@@ -2066,6 +2012,9 @@
       emailTemplates: legacySyncTemplates,
       whatsappTemplates: legacySyncWhatsappTemplates,
       noteTemplates: legacySyncNoteTemplates,
+      inlineQuickActionsEnabled: _legacyQuickActionsPanel,
+      composerTemplateSearchEnabled: _legacyComposerSearch,
+      hubspotTemplatesEnabled: _legacyHubSpotTemplates,
       ...savedWithoutLegacy
     } = saved || {};
     const localEmailTemplates = localResult[constants.EMAIL_TEMPLATES_LOCAL_KEY];
@@ -2100,12 +2049,9 @@
       whatsappTemplates,
       noteTemplates
     };
-    state.settings.inlineQuickActionsEnabled = state.settings.inlineQuickActionsEnabled === true;
     state.settings.phoneFlagsEnabled = state.settings.phoneFlagsEnabled !== false;
     state.settings.phoneFlagsExcludedIsos = normalizePhoneFlagsExcludedIsos(state.settings.phoneFlagsExcludedIsos);
     state.settings.sidebarDeclutterEnabled = state.settings.sidebarDeclutterEnabled !== false;
-    state.settings.composerTemplateSearchEnabled = state.settings.composerTemplateSearchEnabled !== false;
-    state.settings.hubspotTemplatesEnabled = state.settings.hubspotTemplatesEnabled !== false;
     state.settings.defaultLaunchMode = App.normalizeLaunchMode(state.settings.defaultLaunchMode);
     state.settings.emailTemplatesShowCloud = state.settings.emailTemplatesShowCloud !== false;
     state.settings.whatsappTemplatesShowCloud = state.settings.whatsappTemplatesShowCloud !== false;
@@ -2243,8 +2189,6 @@
     closeTemplateImportReview,
     openCloudTokenInfoDialog,
     closeCloudTokenInfoDialog,
-    openContactWidgetInfoDialog,
-    closeContactWidgetInfoDialog,
     openCountryCodeInfoDialog,
     closeCountryCodeInfoDialog,
     openBackgroundTabInfoDialog,
