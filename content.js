@@ -2336,6 +2336,10 @@
         object-fit: contain;
       }
 
+      html[data-darkreader-scheme="dark"] .cp-cts-source-icon {
+        filter: invert(1);
+      }
+
       .cp-cts-check {
         opacity: 0.15;
       }
@@ -2658,16 +2662,17 @@
       const isActive = index === kindState.activeIndex;
       const isHubSpot = sourceOf(template) === "hubspot";
       const sourceLabel = isHubSpot ? "HubSpot" : "Contact Point";
-      const badge = picker
+      const sourceIcon = picker
         ? `<img class='cp-cts-source-icon' src='${escapeHtml(isHubSpot ? picker.hubSpotIconUrl : picker.contactPointIconUrl)}' alt='${sourceLabel}' title='${sourceLabel}' width='16' height='16'>`
-        : "<span class='cp-cts-badge cp-cts-badge-cp'>Contact Point</span>";
+        : "";
       const item = (
         `<button type='button' class='cp-cts-item ${isActive ? "cp-cts-active" : ""}' data-cts-template-id='${escapeHtml(
           String(template.id)
         )}' data-cts-index='${index}'>` +
+        sourceIcon +
         `<span class='cp-cts-item-label'>${escapeHtml(template.name || "Untitled")}</span>` +
         "<span class='cp-cts-item-meta'>" +
-        (picker ? "" : badge) +
+        (picker ? "" : "<span class='cp-cts-badge cp-cts-badge-cp'>Contact Point</span>") +
         `${sourceOf(template) === "cloud" ? "<span aria-hidden='true' title='Cloud template'>☁</span>" : ""}` +
         `${
           isHubSpot
@@ -2676,7 +2681,6 @@
                 isUsed ? "Already sent to this contact" : ""
               }'>✓</span>`
         }` +
-        (picker ? badge : "") +
         "</span>" +
         "</button>"
       );
@@ -2855,7 +2859,7 @@
       row, panel, inputWrap, input, dropdown, launcher,
       portalId: getHubSpotPortalId(),
       hubSpotIconUrl: chrome.runtime.getURL("icons/hubspot.svg"),
-      contactPointIconUrl: chrome.runtime.getURL("icons/icon-32.png"),
+      contactPointIconUrl: chrome.runtime.getURL("icons/contact-point-monochrome.svg"),
       slot: panel.querySelector(".cp-cts-sidebar-slot"),
       status: panel.querySelector(".cp-cts-status"),
       collapse: panel.querySelector(".cp-cts-collapse"),

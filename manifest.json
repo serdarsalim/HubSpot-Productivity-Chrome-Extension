@@ -52,7 +52,7 @@
       "resources": [
         "vendor/flags/*.svg",
         "icons/hubspot.svg",
-        "icons/icon-32.png"
+        "icons/contact-point-monochrome.svg"
       ],
       "matches": [
         "https://*.hubspot.com/*"
