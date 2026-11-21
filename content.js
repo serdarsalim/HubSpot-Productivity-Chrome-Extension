@@ -31,7 +31,6 @@
   const NOTE_TEMPLATES_LOCAL_KEY = "popupNoteTemplates";
   const TEMPLATE_USAGE_LOCAL_KEY = "popupTemplateUsageByContact";
   const TEMPLATE_STATS_LOCAL_KEY = "popupTemplateUsageStats";
-  const INLINE_NOTE_TEMPLATE_USAGE_LOCAL_KEY = "popupInlineNoteTemplateUsageByContact";
   const CLOUD_AUTH_LOCAL_KEY = "popupCloudAuth";
   const CLOUD_AUTH_LIST_LOCAL_KEY = "popupCloudAuthList";
   const CLOUD_EMAIL_CACHE_PREFIX = "popupCloudEmailTemplates::";
@@ -218,15 +217,7 @@
           contactTemplateState.templateUsageByContact = normalizeInlineTemplateUsageMap(
             changes[TEMPLATE_USAGE_LOCAL_KEY]?.newValue
           );
-          renderComposerTemplateDropdown("email");
           if (waTemplatePopoverState.open) renderWaTemplatePopoverList();
-        }
-
-        if (areaName === "local" && Object.prototype.hasOwnProperty.call(changes, INLINE_NOTE_TEMPLATE_USAGE_LOCAL_KEY)) {
-          contactTemplateState.noteTemplateUsageByContact = normalizeInlineNoteTemplateUsageMap(
-            changes[INLINE_NOTE_TEMPLATE_USAGE_LOCAL_KEY]?.newValue
-          );
-          renderComposerTemplateDropdown("note");
         }
 
         if (areaName === "local") {
@@ -2614,7 +2605,6 @@
 
     const renderItem = (template) => {
       const index = kindState.visibleTemplateIds.indexOf(String(template.id));
-      const isUsed = hasInlineTemplateBeenUsed(kindKey, template.id);
       const isActive = index === kindState.activeIndex;
       const isHubSpot = sourceOf(template) === "hubspot";
       const sourceLabel = isHubSpot ? "HubSpot" : "Contact Point";
@@ -2626,16 +2616,9 @@
         )}' data-cts-index='${index}'>` +
         sourceIcon +
         `<span class='cp-cts-item-label'>${escapeHtml(template.name || "Untitled")}</span>` +
-        "<span class='cp-cts-item-meta'>" +
-        `${sourceOf(template) === "cloud" ? "<span aria-hidden='true' title='Cloud template'>☁</span>" : ""}` +
-        `${
-          isHubSpot
-            ? ""
-            : `<span class='cp-cts-check ${isUsed ? "is-used" : ""}' aria-hidden='true' title='${
-                isUsed ? "Already sent to this contact" : ""
-              }'>✓</span>`
-        }` +
-        "</span>" +
+        (sourceOf(template) === "cloud"
+          ? "<span class='cp-cts-item-meta' aria-hidden='true' title='Cloud template'>☁</span>"
+          : "") +
         "</button>"
       );
       const favoriteKey = composerFavoriteKey(kindKey, template);
@@ -2694,12 +2677,9 @@
         return;
       }
 
-      markInlineTemplateUsed(kindKey, template.id);
+      if (kindKey === "email") void recordInlineTemplateStatsUse("email", template.id);
       void trackInlineCloudTemplateUse(template);
-      if (picker?.docked) {
-        renderComposerTemplateDropdown(kindKey);
-        return;
-      }
+      if (picker?.docked) return;
       kindState.query = "";
       if (input instanceof HTMLInputElement) input.value = "";
       closeComposerTemplateDropdown(kindKey);
@@ -3101,7 +3081,7 @@
 
     const renderItem = (template) => {
       const index = waTemplatePopoverState.visibleIds.indexOf(String(template.id));
-      const isUsed = hasInlineTemplateBeenUsed("whatsapp", template.id);
+      const isUsed = hasInlineWhatsappTemplateBeenUsed(template.id);
       const isActive = index === waTemplatePopoverState.activeIndex;
       return (
         `<button type='button' class='cp-cts-item ${isActive ? "cp-cts-active" : ""}' data-wa-template-id='${escapeHtml(
@@ -3147,7 +3127,7 @@
     waTemplatePopoverState.busy = true;
     try {
       await applyInlineWhatsappTemplate(template);
-      markInlineTemplateUsed("whatsapp", template.id);
+      markInlineWhatsappTemplateUsed(template.id);
       void trackInlineCloudTemplateUse(template);
       closeWaTemplatePopover();
     } catch (error) {
@@ -4718,7 +4698,6 @@
     },
     cloudAuthList: [],
     templateUsageByContact: {},
-    noteTemplateUsageByContact: {},
     countryPrefix: DEFAULT_COUNTRY_CODE,
     phoneFlagsEnabled: true,
     phoneFlagsExcludedIsos: []
@@ -4784,26 +4763,6 @@
       }
 
       normalized[contactKey] = { email, whatsapp };
-    }
-
-    return normalized;
-  }
-
-  function normalizeInlineNoteTemplateUsageMap(rawUsage) {
-    if (!rawUsage || typeof rawUsage !== "object") return {};
-    const normalized = {};
-
-    for (const [contactKeyInput, usageInput] of Object.entries(rawUsage)) {
-      const contactKey = String(contactKeyInput || "").trim();
-      if (!contactKey) continue;
-      const usage = usageInput && typeof usageInput === "object" ? usageInput : {};
-      const note = {};
-      for (const [templateIdInput, usedInput] of Object.entries(usage)) {
-        const templateId = String(templateIdInput || "").trim();
-        if (!templateId || usedInput !== true) continue;
-        note[templateId] = true;
-      }
-      normalized[contactKey] = note;
     }
 
     return normalized;
@@ -5001,29 +4960,12 @@
     return contactTemplateState.templateUsageByContact[key];
   }
 
-  function getInlineNoteTemplateUsageForContact(contactKey) {
-    const key = String(contactKey || "").trim();
-    if (!key) return null;
-    if (!contactTemplateState.noteTemplateUsageByContact[key]) {
-      contactTemplateState.noteTemplateUsageByContact[key] = Object.create(null);
-    }
-    return contactTemplateState.noteTemplateUsageByContact[key];
-  }
-
-  function hasInlineTemplateBeenUsed(kind, templateIdInput) {
+  function hasInlineWhatsappTemplateBeenUsed(templateIdInput) {
     const contactKey = getInlineUsageContactKey();
     const templateId = String(templateIdInput || "").trim();
     if (!contactKey || !templateId) return false;
 
-    if (String(kind || "").toLowerCase() === "note") {
-      const usage = getInlineNoteTemplateUsageForContact(contactKey);
-      return !!usage && usage[templateId] === true;
-    }
-
-    const usage = getInlineTemplateUsageForContact(contactKey);
-    if (!usage) return false;
-    const usageKind = normalizeInlineUsageKind(kind);
-    return usage[usageKind][templateId] === true;
+    return contactTemplateState.templateUsageByContact[contactKey]?.whatsapp[templateId] === true;
   }
 
   function persistInlineTemplateUsage() {
@@ -5077,35 +5019,16 @@
     }
   }
 
-  function persistInlineNoteTemplateUsage() {
-    const payload = normalizeInlineNoteTemplateUsageMap(contactTemplateState.noteTemplateUsageByContact);
-    contactTemplateState.noteTemplateUsageByContact = payload;
-    try {
-      chrome.storage.local.set({ [INLINE_NOTE_TEMPLATE_USAGE_LOCAL_KEY]: payload });
-    } catch (_error) {
-      // Ignore storage write failures.
-    }
-  }
-
-  function markInlineTemplateUsed(kind, templateIdInput) {
+  function markInlineWhatsappTemplateUsed(templateIdInput) {
     const contactKey = getInlineUsageContactKey();
     const templateId = String(templateIdInput || "").trim();
     if (!contactKey || !templateId) return;
 
-    if (String(kind || "").toLowerCase() === "note") {
-      const usage = getInlineNoteTemplateUsageForContact(contactKey);
-      if (!usage) return;
-      usage[templateId] = true;
-      persistInlineNoteTemplateUsage();
-      return;
-    }
-
     const usage = getInlineTemplateUsageForContact(contactKey);
     if (!usage) return;
-    const usageKind = normalizeInlineUsageKind(kind);
-    usage[usageKind][templateId] = true;
+    usage.whatsapp[templateId] = true;
     persistInlineTemplateUsage();
-    void recordInlineTemplateStatsUse(usageKind, templateId);
+    void recordInlineTemplateStatsUse("whatsapp", templateId);
   }
 
   function findInlineCloudAuthByOrganizationId(organizationIdInput) {
@@ -5242,7 +5165,6 @@
       NOTE_TEMPLATES_LOCAL_KEY,
       WHATSAPP_TEMPLATES_LOCAL_KEY,
       TEMPLATE_USAGE_LOCAL_KEY,
-      INLINE_NOTE_TEMPLATE_USAGE_LOCAL_KEY,
       CLOUD_AUTH_LIST_LOCAL_KEY,
       CLOUD_AUTH_LOCAL_KEY
     ]);
@@ -5282,9 +5204,6 @@
       cloudWhatsappTemplates
     );
     contactTemplateState.templateUsageByContact = normalizeInlineTemplateUsageMap(local?.[TEMPLATE_USAGE_LOCAL_KEY]);
-    contactTemplateState.noteTemplateUsageByContact = normalizeInlineNoteTemplateUsageMap(
-      local?.[INLINE_NOTE_TEMPLATE_USAGE_LOCAL_KEY]
-    );
   }
 
   function whatsappIcon() {
