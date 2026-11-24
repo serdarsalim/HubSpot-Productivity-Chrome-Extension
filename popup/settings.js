@@ -74,11 +74,37 @@
     // appears when the user asks for it ("Paste a key instead").
   }
 
+  function normalizeCloudIdentity(raw) {
+    const email = String(raw?.email || "").trim();
+    const token = String(raw?.token || "").trim();
+    return email && token.startsWith("cpi_") ? { email, token } : null;
+  }
+
+  // Three states:
+  // - on a team: sign-in is hidden; teams added later arrive on their own
+  //   (discoverNewCloudTeams)
+  // - signed in, no team yet: "Signed in as X", waiting for an admin to add them
+  // - not signed in: the Sign in with Google button
   function renderCloudGoogleSignIn() {
-    // Once connected, sign-in disappears: teams added later are picked up
-    // automatically when the popup opens (discoverNewCloudTeams).
     const connected = getCloudConnectionCount() > 0;
+    const identity = state.cloud.identity;
+    const waiting = !connected && Boolean(identity);
+
     if (dom.cloudGoogleRow) dom.cloudGoogleRow.hidden = connected;
+    if (dom.cloudSignedInNote) {
+      dom.cloudSignedInNote.hidden = !waiting;
+      dom.cloudSignedInNote.textContent = waiting
+        ? `Signed in as ${identity.email}. You're not on a team yet. Once an admin adds this email, its templates show up here by themselves.`
+        : "";
+    }
+    if (dom.cloudGoogleHint) dom.cloudGoogleHint.hidden = waiting;
+    if (dom.cloudGoogleSignInBtn) {
+      dom.cloudGoogleSignInBtn.classList.toggle("primary", !waiting);
+      dom.cloudGoogleSignInBtn.classList.toggle("cloud-google-link", waiting);
+    }
+    if (dom.cloudGoogleSignInLabel) {
+      dom.cloudGoogleSignInLabel.textContent = waiting ? "Use a different Google account" : "Sign in with Google";
+    }
   }
 
   async function startCloudGoogleSignIn() {
@@ -103,6 +129,11 @@
   // the website. Pick them up here if the popup is open at the time.
   async function onCloudAuthStorageChanged(changes, areaName) {
     if (areaName !== "local") return;
+    const identityChange = changes?.[constants.CLOUD_IDENTITY_LOCAL_KEY];
+    if (identityChange) {
+      state.cloud.identity = normalizeCloudIdentity(identityChange.newValue);
+      renderCloudGoogleSignIn();
+    }
     const change = changes?.[constants.CLOUD_AUTH_LIST_LOCAL_KEY];
     if (!change) return;
     const nextList = normalizeCloudAuthList(change.newValue);
@@ -207,7 +238,7 @@
 
     const authList = Array.isArray(state.cloud.authList) ? state.cloud.authList : [];
     if (!authList.length) {
-      dom.cloudConnectionStatusEl.textContent = "Not connected";
+      dom.cloudConnectionStatusEl.textContent = "";
       return;
     }
 
@@ -1549,7 +1580,8 @@
   // pasted keys are skipped by the server.
   async function discoverNewCloudTeams() {
     const authList = normalizeCloudAuthList(state.cloud.authList);
-    if (!authList.length) return [];
+    const identity = state.cloud.identity;
+    if (!authList.length && !identity) return [];
 
     const intervalMs = Number(App.timing?.popup?.cloudTeamDiscoveryIntervalMs || 5 * 60 * 1000);
     const stored = await chrome.storage.local.get(constants.CLOUD_TEAM_DISCOVERY_AT_LOCAL_KEY);
@@ -1558,12 +1590,22 @@
     await chrome.storage.local.set({ [constants.CLOUD_TEAM_DISCOVERY_AT_LOCAL_KEY]: Date.now() });
 
     const connectedOrganizationIds = authList.map((auth) => auth.organizationId);
-    for (const auth of authList) {
+    const leftStored = await chrome.storage.local.get(constants.CLOUD_LEFT_ORG_IDS_LOCAL_KEY);
+    const leftOrganizationIds = Array.isArray(leftStored?.[constants.CLOUD_LEFT_ORG_IDS_LOCAL_KEY])
+      ? leftStored[constants.CLOUD_LEFT_ORG_IDS_LOCAL_KEY].map(String)
+      : [];
+    const requestBody = { connectedOrganizationIds, leftOrganizationIds };
+
+    // The sign-in identity works even with no team; older sign-ins fall back
+    // to their Google sign-in keys.
+    const credentials = [
+      ...(identity ? [{ apiToken: identity.token, apiBaseUrl: constants.CLOUD_API_BASE_URL }] : []),
+      ...authList
+    ];
+    for (const auth of credentials) {
       let result = null;
       try {
-        result = await fetchCloudJson("/api/v1/extension/teams/sync", auth.apiToken, auth.apiBaseUrl, 12000, {
-          connectedOrganizationIds
-        });
+        result = await fetchCloudJson("/api/v1/extension/teams/sync", auth.apiToken, auth.apiBaseUrl, 12000, requestBody);
       } catch {
         continue;
       }
@@ -1581,7 +1623,12 @@
             updatedAt: new Date().toISOString()
           })
         )
-        .filter((item) => item && !connectedOrganizationIds.includes(item.organizationId));
+        .filter(
+          (item) =>
+            item &&
+            !connectedOrganizationIds.includes(item.organizationId) &&
+            !leftOrganizationIds.includes(item.organizationId)
+        );
       if (!additions.length) return [];
 
       state.cloud.authList = normalizeCloudAuthList([...authList, ...additions]);
@@ -1646,9 +1693,19 @@
     if (removeBtn instanceof HTMLElement) {
       const orgId = String(removeBtn.getAttribute("data-cloud-auth-org-id") || "").trim();
       if (!orgId) return;
-      const confirmed = window.confirm("Leave this team? Its shared templates disappear from Contact Point until you add the key again.");
+      const confirmed = window.confirm(
+        "Leave this team? Its cloud templates disappear from Contact Point. Sign in with Google again to rejoin."
+      );
       if (!confirmed) return;
-      await clearCloudConnection({ organizationId: orgId, statusMessage: "Team access key removed." });
+      // Remember the choice so automatic team pickup doesn't re-add it.
+      const leftStored = await chrome.storage.local.get(constants.CLOUD_LEFT_ORG_IDS_LOCAL_KEY);
+      const leftIds = Array.isArray(leftStored?.[constants.CLOUD_LEFT_ORG_IDS_LOCAL_KEY])
+        ? leftStored[constants.CLOUD_LEFT_ORG_IDS_LOCAL_KEY].map(String)
+        : [];
+      await chrome.storage.local.set({
+        [constants.CLOUD_LEFT_ORG_IDS_LOCAL_KEY]: Array.from(new Set([...leftIds, orgId]))
+      });
+      await clearCloudConnection({ organizationId: orgId, statusMessage: "You left the team." });
       renderCloudAuthCards();
       return;
     }
@@ -2069,7 +2126,8 @@
         constants.QUICK_NOTES_LOCAL_KEY,
         constants.CLOUD_AUTH_LOCAL_KEY,
         constants.CLOUD_AUTH_LIST_LOCAL_KEY,
-        constants.CLOUD_ACTIVE_ORG_ID_LOCAL_KEY
+        constants.CLOUD_ACTIVE_ORG_ID_LOCAL_KEY,
+        constants.CLOUD_IDENTITY_LOCAL_KEY
       ])
     ]);
     const saved = syncResult[constants.SETTINGS_KEY];
@@ -2128,6 +2186,7 @@
     const migratedList = normalizeCloudAuthList(savedCloudAuthList);
     const legacyAuth = App.normalizeCloudAuth(savedCloudAuth);
     state.cloud.authList = migratedList.length ? migratedList : legacyAuth ? [legacyAuth] : [];
+    state.cloud.identity = normalizeCloudIdentity(localResult[constants.CLOUD_IDENTITY_LOCAL_KEY]);
     const primaryAuth = state.cloud.authList[0] || null;
     state.cloud.activeOrganizationId = "";
     state.cloud.auth = primaryAuth;

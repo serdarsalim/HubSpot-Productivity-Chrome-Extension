@@ -1742,6 +1742,11 @@
         margin-bottom: 0;
       }
 
+      .nav-info-btn {
+        align-self: center;
+        margin-left: -6px;
+      }
+
       .settings-info-btn {
         flex: 0 0 20px;
         width: 20px;
@@ -1770,6 +1775,34 @@
       }
 
       .cloud-google-row[hidden] {
+        display: none;
+      }
+
+      .cloud-signed-in-note {
+        margin: 0;
+        font-size: 13px;
+        line-height: 1.45;
+      }
+
+      .cloud-google-btn.cloud-google-link {
+        border: none;
+        background: none;
+        box-shadow: none;
+        padding: 0;
+        min-height: 0;
+        font-size: 12px;
+        font-weight: 500;
+        color: inherit;
+        opacity: 0.75;
+        text-decoration: underline;
+        text-underline-offset: 2px;
+      }
+
+      .cloud-google-btn.cloud-google-link:hover {
+        opacity: 1;
+      }
+
+      .cloud-google-btn.cloud-google-link .cloud-google-mark {
         display: none;
       }
 
@@ -3412,6 +3445,8 @@
               </svg>
               <span class="nav-label">Local templates</span>
             </button>
+            <button class="settings-info-btn nav-info-btn" type="button" popovertarget="localTemplatesInfo" aria-label="What are local templates?">i</button>
+            <span id="localTemplatesInfo" class="setting-info-popover" popover>Local templates are your own. They're saved in this browser only, so your team doesn't see them and they don't move to another computer. To move them, use Templates backup in Settings. Cloud templates are the shared ones your team manages on the website.</span>
             <button id="settingsBtn" class="nav-tab" aria-label="Open settings" title="Open settings">
               <svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
                 <circle cx="12" cy="12" r="3"></circle>
@@ -3645,6 +3680,31 @@
     <section id="settingsPage" class="settings-page" hidden>
       <div class="settings-card">
         <section class="settings-section">
+          <div class="cloud-token-label-row">
+            <h3 class="settings-section-title">Cloud templates</h3>
+            <button
+              id="cloudTokenInfoBtn"
+              class="settings-info-btn"
+              type="button"
+              aria-label="About cloud templates"
+              title="About cloud templates"
+            >
+              i
+            </button>
+          </div>
+          <div id="cloudGoogleRow" class="cloud-google-row">
+            <p id="cloudSignedInNote" class="cloud-signed-in-note" hidden></p>
+            <button id="cloudGoogleSignInBtn" class="btn primary cloud-google-btn" type="button">
+              <svg class="cloud-google-mark" viewBox="0 0 24 24" aria-hidden="true"><path fill="#4285F4" d="M21.6 12.23c0-.74-.07-1.45-.19-2.14H12v4.05h5.38a4.6 4.6 0 0 1-2 3.02v2.51h3.24c1.9-1.75 2.98-4.32 2.98-7.44Z"/><path fill="#34A853" d="M12 22c2.7 0 4.97-.9 6.62-2.43l-3.24-2.51c-.9.6-2.04.95-3.38.95-2.6 0-4.8-1.76-5.58-4.12H3.07v2.59A10 10 0 0 0 12 22Z"/><path fill="#FBBC05" d="M6.42 13.89A6.02 6.02 0 0 1 6.1 12c0-.65.11-1.28.31-1.89V7.52H3.07A10 10 0 0 0 2 12c0 1.61.39 3.13 1.07 4.48l3.35-2.59Z"/><path fill="#EA4335" d="M12 5.99c1.47 0 2.79.5 3.83 1.5l2.86-2.86C16.96 3.01 14.7 2 12 2a10 10 0 0 0-8.93 5.52l3.35 2.59C7.2 7.75 9.4 5.99 12 5.99Z"/></svg>
+              <span id="cloudGoogleSignInLabel">Sign in with Google</span>
+            </button>
+            <p id="cloudGoogleHint" class="cloud-google-hint">Use your work email. If your admin added you, your team's templates show up right away.</p>
+          </div>
+          <div id="cloudAuthCards" class="cloud-auth-cards"></div>
+          <p id="cloudConnectionStatus" class="template-import-summary"></p>
+        </section>
+
+        <section class="settings-section">
           <h3 class="settings-section-title">Phone numbers</h3>
           <div class="settings-toggle-grid">
             <div class="setting-row">
@@ -3707,30 +3767,6 @@
               <div id="phoneFlagsExcludedChips" class="phone-flags-excluded-chips" hidden></div>
             </div>
           </div>
-        </section>
-
-        <section class="settings-section">
-          <div class="cloud-token-label-row">
-            <h3 class="settings-section-title">Cloud templates</h3>
-            <button
-              id="cloudTokenInfoBtn"
-              class="settings-info-btn"
-              type="button"
-              aria-label="About cloud templates"
-              title="About cloud templates"
-            >
-              i
-            </button>
-          </div>
-          <div id="cloudGoogleRow" class="cloud-google-row">
-            <button id="cloudGoogleSignInBtn" class="btn primary cloud-google-btn" type="button">
-              <svg class="cloud-google-mark" viewBox="0 0 24 24" aria-hidden="true"><path fill="#4285F4" d="M21.6 12.23c0-.74-.07-1.45-.19-2.14H12v4.05h5.38a4.6 4.6 0 0 1-2 3.02v2.51h3.24c1.9-1.75 2.98-4.32 2.98-7.44Z"/><path fill="#34A853" d="M12 22c2.7 0 4.97-.9 6.62-2.43l-3.24-2.51c-.9.6-2.04.95-3.38.95-2.6 0-4.8-1.76-5.58-4.12H3.07v2.59A10 10 0 0 0 12 22Z"/><path fill="#FBBC05" d="M6.42 13.89A6.02 6.02 0 0 1 6.1 12c0-.65.11-1.28.31-1.89V7.52H3.07A10 10 0 0 0 2 12c0 1.61.39 3.13 1.07 4.48l3.35-2.59Z"/><path fill="#EA4335" d="M12 5.99c1.47 0 2.79.5 3.83 1.5l2.86-2.86C16.96 3.01 14.7 2 12 2a10 10 0 0 0-8.93 5.52l3.35 2.59C7.2 7.75 9.4 5.99 12 5.99Z"/></svg>
-              <span id="cloudGoogleSignInLabel">Sign in with Google</span>
-            </button>
-            <p id="cloudGoogleHint" class="cloud-google-hint">Use your work email. If your admin added you, your team's templates show up right away.</p>
-          </div>
-          <div id="cloudAuthCards" class="cloud-auth-cards"></div>
-          <p id="cloudConnectionStatus" class="template-import-summary">Not connected</p>
         </section>
 
         <section class="settings-section">

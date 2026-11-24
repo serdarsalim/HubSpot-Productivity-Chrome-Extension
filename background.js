@@ -312,6 +312,8 @@ chrome.storage.onChanged.addListener((changes, areaName) => {
 });
 
 const CLOUD_CONNECT_MESSAGE = "CONTACT_POINT_CONNECT";
+const CLOUD_IDENTITY_LOCAL_KEY = "popupCloudIdentity";
+const CLOUD_LEFT_ORG_IDS_LOCAL_KEY = "popupCloudLeftOrgIds";
 
 function getCloudSiteOrigin() {
   try {
@@ -339,7 +341,20 @@ async function connectCloudFromWebsite(message) {
   const tokens = incoming
     .map((item) => String(item?.token || "").trim())
     .filter((token) => token.startsWith("cpt_"));
-  if (!tokens.length) return { ok: false, error: "No keys received." };
+  const identityToken = String(message?.identityToken || "").trim();
+  const email = String(message?.email || "").trim();
+
+  // Stay signed in even with no team yet; the popup uses this to pick up
+  // teams later. An explicit sign-in also forgets previously left teams.
+  if (identityToken.startsWith("cpi_") && email) {
+    await chrome.storage.local.set({
+      [CLOUD_IDENTITY_LOCAL_KEY]: { email, token: identityToken, signedInAt: new Date().toISOString() },
+      [CLOUD_LEFT_ORG_IDS_LOCAL_KEY]: []
+    });
+  }
+  if (!tokens.length) {
+    return identityToken ? { ok: true, connected: 0 } : { ok: false, error: "No keys received." };
+  }
 
   const stored = await chrome.storage.local.get([CLOUD_AUTH_LIST_LOCAL_KEY, CLOUD_AUTH_LOCAL_KEY]);
   const existingRaw = Array.isArray(stored?.[CLOUD_AUTH_LIST_LOCAL_KEY]) ? stored[CLOUD_AUTH_LIST_LOCAL_KEY] : [];

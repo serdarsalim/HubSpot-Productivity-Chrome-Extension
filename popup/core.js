@@ -143,6 +143,9 @@
     cloudAuthCardsEl: document.getElementById("cloudAuthCards"),
     addCloudAuthBtn: document.getElementById("addCloudAuthBtn"),
     cloudGoogleRow: document.getElementById("cloudGoogleRow"),
+    cloudSignedInNote: document.getElementById("cloudSignedInNote"),
+    cloudGoogleHint: document.getElementById("cloudGoogleHint"),
+    cloudGoogleSignInLabel: document.getElementById("cloudGoogleSignInLabel"),
     cloudGoogleSignInBtn: document.getElementById("cloudGoogleSignInBtn"),
     cloudConnectionStatusEl: document.getElementById("cloudConnectionStatus"),
     cloudTokenInfoBtn: document.getElementById("cloudTokenInfoBtn"),
@@ -199,6 +202,11 @@
   const CLOUD_AUTH_LIST_LOCAL_KEY = "popupCloudAuthList";
   const CLOUD_ACTIVE_ORG_ID_LOCAL_KEY = "popupCloudActiveOrganizationId";
   const CLOUD_TEAM_DISCOVERY_AT_LOCAL_KEY = "popupCloudTeamDiscoveryAt";
+  // { email, token } from Google sign-in; kept even with no team so teams added
+  // later are picked up without signing in again.
+  const CLOUD_IDENTITY_LOCAL_KEY = "popupCloudIdentity";
+  // Organization IDs the person chose to leave; never re-added automatically.
+  const CLOUD_LEFT_ORG_IDS_LOCAL_KEY = "popupCloudLeftOrgIds";
   const HUBSPOT_URL_PATTERNS = Object.freeze(["https://*.hubspot.com/*"]);
   const HUBSPOT_FALLBACK_ORIGIN = "https://app.hubspot.com";
   const CLOUD_EMAIL_CACHE_PREFIX = "popupCloudEmailTemplates::";
@@ -302,6 +310,7 @@
     cloud: {
       auth: null,
       authList: [],
+      identity: null,
       activeOrganizationId: "",
       emailTemplates: [],
       whatsappTemplates: [],
@@ -1541,6 +1550,8 @@
     CLOUD_AUTH_LIST_LOCAL_KEY,
     CLOUD_ACTIVE_ORG_ID_LOCAL_KEY,
     CLOUD_TEAM_DISCOVERY_AT_LOCAL_KEY,
+    CLOUD_IDENTITY_LOCAL_KEY,
+    CLOUD_LEFT_ORG_IDS_LOCAL_KEY,
     HUBSPOT_URL_PATTERNS,
     HUBSPOT_FALLBACK_ORIGIN,
     CLOUD_EMAIL_CACHE_PREFIX,
