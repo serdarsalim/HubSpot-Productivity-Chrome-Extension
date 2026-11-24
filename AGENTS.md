@@ -177,7 +177,8 @@ Source of truth:
   origin (`manifest.json` `externally_connectable`), verifies each key via
   `/api/v1/extension/me`, and merges into `popupCloudAuthList`. Open popups
   react through `chrome.storage.onChanged`.
-- Pasting a key is still supported (`Paste a key instead`).
+- Manual keys are retired (2026-11-25): no paste UI in the extension and no
+  key creation on the website. Keys pasted before then keep working.
 
 ## Settings and Storage
 

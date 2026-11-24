@@ -2,3 +2,4 @@
 shareable/
 .env
 *.zip
+local-test/
