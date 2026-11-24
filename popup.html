@@ -2539,7 +2539,7 @@
       .email-templates-shell {
         display: grid;
         grid-template-columns: 300px minmax(0, 1fr);
-        gap: 14px;
+        gap: 0;
         flex: 1;
         min-height: 0;
       }
@@ -2561,9 +2561,18 @@
         box-shadow: 0 4px 12px rgba(16, 45, 78, 0.04);
       }
 
+      /* List and editor sit flush as one panel: no gap, shared divider. */
       .email-templates-sidebar {
         display: flex;
         flex-direction: column;
+        border-top-right-radius: 0;
+        border-bottom-right-radius: 0;
+      }
+
+      .email-templates-shell > .email-template-editor-pane {
+        border-left: none;
+        border-top-left-radius: 0;
+        border-bottom-left-radius: 0;
       }
 
       .email-templates-sidebar-head {
