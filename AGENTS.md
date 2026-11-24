@@ -165,6 +165,20 @@ Source of truth:
 - Consume in popup modules via `App.messageTypes`
 - Consume in content script via `globalThis.ContactPilotShared.MESSAGE_TYPES`
 
+## Team Sign-In (Website -> Extension)
+
+- Settings > Team templates has `Sign in with Google` (default path). It opens
+  `<CLOUD_API_BASE_URL>/api/extension-connect/start?ext=<extension id>`.
+- The website matches the verified Google email to teams (admin added the
+  email, or the person admins the workspace), issues per-person keys and its
+  `/connect` page sends them with
+  `chrome.runtime.sendMessage(extId, { type: "CONTACT_POINT_CONNECT", connections: [{ organizationName, token }] })`.
+- `background.js` `onMessageExternal` accepts it only from the cloud site
+  origin (`manifest.json` `externally_connectable`), verifies each key via
+  `/api/v1/extension/me`, and merges into `popupCloudAuthList`. Open popups
+  react through `chrome.storage.onChanged`.
+- Pasting a key is still supported (`Paste a key instead`).
+
 ## Settings and Storage
 
 Keys:

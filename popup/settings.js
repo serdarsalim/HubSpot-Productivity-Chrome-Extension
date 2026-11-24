@@ -64,8 +64,6 @@
   }
 
   function canShowAddMoreButton() {
-    const connectedCount = getCloudConnectionCount();
-    if (connectedCount <= 0) return false;
     if (cloudPendingRows.length > 0) return false;
     return canAddMoreCloudRows();
   }
@@ -76,9 +74,71 @@
   }
 
   function ensureDefaultPendingCloudRow() {
-    if (getCloudConnectionCount() === 0 && cloudPendingRows.length === 0) {
-      cloudPendingRows.push(createCloudPendingRow());
+    // Google sign-in is the default way to connect. The paste-a-key row only
+    // appears when the user asks for it ("Paste a key instead").
+  }
+
+  function renderCloudGoogleSignIn() {
+    const connected = getCloudConnectionCount() > 0;
+    if (dom.cloudGoogleSignInBtn) dom.cloudGoogleSignInBtn.classList.toggle("primary", !connected);
+    if (dom.cloudGoogleSignInLabel) {
+      dom.cloudGoogleSignInLabel.textContent = connected ? "Sign in with Google again" : "Sign in with Google";
     }
+    if (dom.cloudGoogleSignInBtn) {
+      dom.cloudGoogleSignInBtn.title = connected
+        ? "Picks up any team your admin added you to since you last signed in"
+        : "Connect your team's shared templates";
+    }
+    if (dom.cloudGoogleHint) dom.cloudGoogleHint.hidden = connected;
+  }
+
+  async function startCloudGoogleSignIn() {
+    const baseUrl = String(constants.CLOUD_API_BASE_URL || "").replace(/\/+$/g, "");
+    const url = `${baseUrl}/api/extension-connect/start?ext=${encodeURIComponent(chrome.runtime.id)}`;
+    try {
+      await chrome.tabs.create({ url, active: true });
+      App.setStatus("Finish signing in on the new tab.");
+    } catch (error) {
+      App.setStatus(`Could not open sign-in: ${String(error?.message || error)}`);
+    }
+  }
+
+  function cloudAuthSignature(list) {
+    return (Array.isArray(list) ? list : [])
+      .map((item) => `${String(item?.organizationId || "")}:${String(item?.apiToken || "")}`)
+      .sort()
+      .join("|");
+  }
+
+  // The background worker writes new connections after a Google sign-in on
+  // the website. Pick them up here if the popup is open at the time.
+  async function onCloudAuthStorageChanged(changes, areaName) {
+    if (areaName !== "local") return;
+    const change = changes?.[constants.CLOUD_AUTH_LIST_LOCAL_KEY];
+    if (!change) return;
+    const nextList = normalizeCloudAuthList(change.newValue);
+    if (cloudAuthSignature(nextList) === cloudAuthSignature(state.cloud.authList)) return;
+
+    const previousCount = getCloudConnectionCount();
+    state.cloud.authList = nextList;
+    state.cloud.auth = nextList[0] || null;
+    cloudPendingRows = [];
+    await loadCloudCacheFromStorage();
+    await refreshCloudTemplates({ force: true, showToast: false, silent: true });
+    renderCloudConnectionStatus();
+    renderCloudAuthCards();
+    rerenderTemplateViewsForCloudChange();
+    if (nextList.length > previousCount && typeof App.showToast === "function") {
+      App.showToast("Signed in. Team templates are ready.");
+    }
+  }
+
+  if (chrome?.storage?.onChanged) {
+    chrome.storage.onChanged.addListener((changes, areaName) => {
+      void onCloudAuthStorageChanged(changes, areaName).catch((error) => {
+        console.error("Could not apply cloud sign-in", error);
+      });
+    });
   }
 
   async function persistCloudAuthState() {
@@ -234,9 +294,15 @@
     `);
 
     dom.cloudAuthCardsEl.innerHTML = [...authCards, ...pendingCards].join("");
+    renderCloudGoogleSignIn();
     if (dom.addCloudAuthBtn) {
+      const hasConnections = getCloudConnectionCount() > 0;
       dom.addCloudAuthBtn.disabled = !canAddMoreCloudRows();
-      dom.addCloudAuthBtn.textContent = canAddMoreCloudRows() ? "Add another team" : "Max 5 org keys";
+      dom.addCloudAuthBtn.textContent = !canAddMoreCloudRows()
+        ? "Max 5 org keys"
+        : hasConnections
+          ? "Paste another team key"
+          : "Paste a key instead";
       dom.addCloudAuthBtn.hidden = !canShowAddMoreButton();
     }
   }
@@ -2158,6 +2224,7 @@
     renderCloudConnectionStatus,
     renderCloudAuthCards,
     addCloudAuthRow,
+    startCloudGoogleSignIn,
     onCloudAuthCardsClick,
     onCloudAuthCardsInput,
     saveCloudApiToken,

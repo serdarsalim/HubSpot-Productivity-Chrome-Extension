@@ -16,6 +16,11 @@
   if (dom.noteSettingsBtn) dom.noteSettingsBtn.addEventListener("click", App.toggleNoteSettings);
   if (typeof App.bindSettingsAutosave === "function") App.bindSettingsAutosave();
   if (dom.addCloudAuthBtn) dom.addCloudAuthBtn.addEventListener("click", App.addCloudAuthRow);
+  if (dom.cloudGoogleSignInBtn) {
+    dom.cloudGoogleSignInBtn.addEventListener("click", () => {
+      void App.startCloudGoogleSignIn();
+    });
+  }
   if (dom.cloudAuthCardsEl) {
     dom.cloudAuthCardsEl.addEventListener("click", (event) => {
       void App.onCloudAuthCardsClick(event);

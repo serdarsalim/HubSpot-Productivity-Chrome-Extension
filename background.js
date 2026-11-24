@@ -311,6 +311,93 @@ chrome.storage.onChanged.addListener((changes, areaName) => {
   });
 });
 
+const CLOUD_CONNECT_MESSAGE = "CONTACT_POINT_CONNECT";
+const MAX_CLOUD_ORG_CONNECTIONS = 5;
+
+function getCloudSiteOrigin() {
+  try {
+    return new URL(DEFAULT_CLOUD_API_BASE_URL).origin;
+  } catch {
+    return "";
+  }
+}
+
+async function fetchCloudIdentity(apiToken) {
+  const baseUrl = DEFAULT_CLOUD_API_BASE_URL.replace(/\/+$/g, "");
+  const response = await fetch(`${baseUrl}/api/v1/extension/me`, {
+    headers: { Accept: "application/json", Authorization: `Bearer ${apiToken}` }
+  });
+  if (!response.ok) throw new Error(`Key check failed with status ${response.status}.`);
+  return response.json();
+}
+
+// Called by the website's /connect page after "Sign in with Google". Each key
+// is verified against the API before it is stored, then merged into the same
+// list the popup uses for pasted keys. Open popups pick it up via
+// chrome.storage.onChanged.
+async function connectCloudFromWebsite(message) {
+  const incoming = Array.isArray(message?.connections) ? message.connections : [];
+  const tokens = incoming
+    .map((item) => String(item?.token || "").trim())
+    .filter((token) => token.startsWith("cpt_"))
+    .slice(0, MAX_CLOUD_ORG_CONNECTIONS);
+  if (!tokens.length) return { ok: false, error: "No keys received." };
+
+  const stored = await chrome.storage.local.get([CLOUD_AUTH_LIST_LOCAL_KEY, CLOUD_AUTH_LOCAL_KEY]);
+  const existingRaw = Array.isArray(stored?.[CLOUD_AUTH_LIST_LOCAL_KEY]) ? stored[CLOUD_AUTH_LIST_LOCAL_KEY] : [];
+  const byOrgId = new Map();
+  for (const item of existingRaw) {
+    const orgId = String(item?.organizationId || "").trim();
+    if (orgId && String(item?.apiToken || "").trim()) byOrgId.set(orgId, item);
+  }
+
+  let connected = 0;
+  for (const apiToken of tokens) {
+    try {
+      const me = await fetchCloudIdentity(apiToken);
+      const organizationId = String(me?.organization?.id || "").trim();
+      if (!organizationId) continue;
+      const previous = byOrgId.get(organizationId);
+      if (!previous && byOrgId.size >= MAX_CLOUD_ORG_CONNECTIONS) continue;
+      byOrgId.set(organizationId, {
+        apiToken,
+        apiBaseUrl: DEFAULT_CLOUD_API_BASE_URL,
+        organizationId,
+        organizationName: String(me?.organization?.name || "").trim(),
+        organizationSlug: String(me?.organization?.slug || "").trim(),
+        templatesPaused: previous?.templatesPaused === true,
+        tokenPrefix: String(me?.token?.prefix || "").trim(),
+        updatedAt: new Date().toISOString()
+      });
+      connected += 1;
+    } catch (error) {
+      console.error("Could not verify team key from sign-in", error);
+    }
+  }
+
+  if (!connected) return { ok: false, error: "Could not verify the team keys." };
+
+  const nextList = Array.from(byOrgId.values());
+  await chrome.storage.local.set({
+    [CLOUD_AUTH_LIST_LOCAL_KEY]: nextList,
+    [CLOUD_AUTH_LOCAL_KEY]: nextList[0] || null
+  });
+  return { ok: true, connected };
+}
+
+chrome.runtime.onMessageExternal.addListener((message, sender, sendResponse) => {
+  if (message?.type !== CLOUD_CONNECT_MESSAGE) return false;
+  const expectedOrigin = getCloudSiteOrigin();
+  if (!expectedOrigin || sender?.origin !== expectedOrigin) {
+    sendResponse({ ok: false, error: "Unexpected sender." });
+    return false;
+  }
+  connectCloudFromWebsite(message)
+    .then(sendResponse)
+    .catch((error) => sendResponse({ ok: false, error: String(error?.message || error || "Unknown error") }));
+  return true;
+});
+
 chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
   if (message?.type === OPEN_POPUP_WINDOW_MESSAGE) {
     openOrFocusPopupWindow()
