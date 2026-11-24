@@ -141,6 +141,7 @@
     cloudApiBaseUrlInput: document.getElementById("cloudApiBaseUrlInput"),
     cloudAuthCardsEl: document.getElementById("cloudAuthCards"),
     addCloudAuthBtn: document.getElementById("addCloudAuthBtn"),
+    cloudGoogleRow: document.getElementById("cloudGoogleRow"),
     cloudGoogleSignInBtn: document.getElementById("cloudGoogleSignInBtn"),
     cloudGoogleSignInLabel: document.getElementById("cloudGoogleSignInLabel"),
     cloudGoogleHint: document.getElementById("cloudGoogleHint"),

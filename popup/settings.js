@@ -80,9 +80,19 @@
 
   function renderCloudGoogleSignIn() {
     const connected = getCloudConnectionCount() > 0;
-    if (dom.cloudGoogleSignInBtn) dom.cloudGoogleSignInBtn.classList.toggle("primary", !connected);
+    // Signed in: shrink to a small link under the team cards. It stays because
+    // signing in again is how someone picks up a team they were added to later.
+    if (dom.cloudGoogleRow && dom.cloudAuthCardsEl) {
+      dom.cloudGoogleRow.classList.toggle("is-connected", connected);
+      if (connected) dom.cloudAuthCardsEl.after(dom.cloudGoogleRow);
+      else dom.cloudAuthCardsEl.before(dom.cloudGoogleRow);
+    }
+    if (dom.cloudGoogleSignInBtn) {
+      dom.cloudGoogleSignInBtn.classList.toggle("primary", !connected);
+      dom.cloudGoogleSignInBtn.classList.toggle("is-compact", connected);
+    }
     if (dom.cloudGoogleSignInLabel) {
-      dom.cloudGoogleSignInLabel.textContent = connected ? "Sign in with Google again" : "Sign in with Google";
+      dom.cloudGoogleSignInLabel.textContent = connected ? "Added to another team? Sign in again" : "Sign in with Google";
     }
     if (dom.cloudGoogleSignInBtn) {
       dom.cloudGoogleSignInBtn.title = connected
