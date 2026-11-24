@@ -3,3 +3,4 @@ shareable/
 .env
 *.zip
 local-test/
+__pycache__/
