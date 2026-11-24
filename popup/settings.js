@@ -118,7 +118,7 @@
     renderCloudAuthCards();
     rerenderTemplateViewsForCloudChange();
     if (nextList.length > previousCount && typeof App.showToast === "function") {
-      App.showToast("Signed in. Team templates are ready.");
+      App.showToast("Signed in. Cloud templates are ready.");
     }
   }
 
@@ -248,7 +248,7 @@
             <span class="cloud-sync-label" data-state="${isPaused ? "paused" : "synced"}">${isPaused ? "Hidden from your template lists" : `Synced ${App.escapeHtml(syncedAt)}`}</span>
           </span>
           <div class="cloud-actions">
-            <button class="btn team-icon-btn cloud-refresh-btn" type="button" data-cloud-refresh-btn="true" data-cloud-auth-org-id="${App.escapeHtml(auth.organizationId)}" aria-label="Sync now" title="Sync now: download the latest team templates"><span class="cloud-refresh-icon" aria-hidden="true">↻</span></button>
+            <button class="btn team-icon-btn cloud-refresh-btn" type="button" data-cloud-refresh-btn="true" data-cloud-auth-org-id="${App.escapeHtml(auth.organizationId)}" aria-label="Sync now" title="Sync now: download the latest cloud templates"><span class="cloud-refresh-icon" aria-hidden="true">↻</span></button>
             <details class="team-more">
               <summary class="btn team-icon-btn" aria-label="More team actions" title="More">⋯</summary>
               <div class="team-more-menu">
@@ -1373,14 +1373,14 @@
     const failed = results.filter((item) => !item.ok);
     if (!silent) {
       if (!failed.length) {
-        App.setStatus(targetOrgId ? "Team templates updated." : `Team templates updated for ${successCount} org(s).`);
+        App.setStatus(targetOrgId ? "Cloud templates updated." : `Cloud templates updated for ${successCount} teams.`);
       } else {
         App.setStatus(`Update finished: ${successCount} succeeded, ${failed.length} failed.`);
       }
     }
     if (showToast && typeof App.showToast === "function") {
       if (!failed.length) {
-        App.showToast(targetOrgId ? "Team templates updated." : `Team templates updated for ${successCount} org(s).`);
+        App.showToast(targetOrgId ? "Cloud templates updated." : `Cloud templates updated for ${successCount} teams.`);
       } else {
         App.showToast(`Update finished: ${successCount} succeeded, ${failed.length} failed.`, 3200);
       }
@@ -1541,7 +1541,7 @@
     rerenderTemplateViewsForCloudChange();
 
     const next = findCloudAuthByOrgId(organizationId);
-    App.setStatus(next?.templatesPaused ? "Team templates hidden." : "Team templates shown.");
+    App.setStatus(next?.templatesPaused ? "Cloud templates hidden." : "Cloud templates shown.");
   }
 
   // Asks the website for teams this person was added to after signing in, so
