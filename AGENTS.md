@@ -182,6 +182,10 @@ Source of truth:
   `TIMING.popup.cloudTeamDiscoveryIntervalMs`) the popup calls
   `POST /api/v1/extension/teams/sync` with a Google sign-in key to pick up
   teams the person was added to later (`popupCloudTeamDiscoveryAt`).
+- Every sign-in also stores `popupCloudIdentity` ({ email, token `cpi_...` })
+  so the extension stays signed in with no team; discovery uses it first.
+  Leaving a team adds its ID to `popupCloudLeftOrgIds`, which discovery
+  excludes; an explicit Google sign-in clears that list.
 - Manual keys are retired (2026-11-25): no paste UI in the extension and no
   key creation on the website. Keys pasted before then keep working.
 
