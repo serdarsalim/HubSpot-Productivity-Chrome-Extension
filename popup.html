@@ -1770,6 +1770,10 @@
         margin-bottom: 10px;
       }
 
+      .cloud-google-row[hidden] {
+        display: none;
+      }
+
       .cloud-google-btn {
         display: inline-flex;
         align-items: center;
@@ -1777,32 +1781,6 @@
         width: auto;
         padding-inline: 14px;
         font-weight: 600;
-      }
-
-      .cloud-google-row.is-connected {
-        margin: 8px 0 0;
-      }
-
-      .cloud-google-btn.is-compact {
-        border: none;
-        background: none;
-        box-shadow: none;
-        padding: 0;
-        min-height: 0;
-        font-size: 12px;
-        font-weight: 500;
-        color: inherit;
-        opacity: 0.75;
-        text-decoration: underline;
-        text-underline-offset: 2px;
-      }
-
-      .cloud-google-btn.is-compact:hover {
-        opacity: 1;
-      }
-
-      .cloud-google-btn.is-compact .cloud-google-mark {
-        display: none;
       }
 
       .cloud-google-mark {
@@ -3750,7 +3728,7 @@
             </button>
           </div>
           <div id="cloudGoogleRow" class="cloud-google-row">
-            <button id="cloudGoogleSignInBtn" class="btn cloud-google-btn" type="button">
+            <button id="cloudGoogleSignInBtn" class="btn primary cloud-google-btn" type="button">
               <svg class="cloud-google-mark" viewBox="0 0 24 24" aria-hidden="true"><path fill="#4285F4" d="M21.6 12.23c0-.74-.07-1.45-.19-2.14H12v4.05h5.38a4.6 4.6 0 0 1-2 3.02v2.51h3.24c1.9-1.75 2.98-4.32 2.98-7.44Z"/><path fill="#34A853" d="M12 22c2.7 0 4.97-.9 6.62-2.43l-3.24-2.51c-.9.6-2.04.95-3.38.95-2.6 0-4.8-1.76-5.58-4.12H3.07v2.59A10 10 0 0 0 12 22Z"/><path fill="#FBBC05" d="M6.42 13.89A6.02 6.02 0 0 1 6.1 12c0-.65.11-1.28.31-1.89V7.52H3.07A10 10 0 0 0 2 12c0 1.61.39 3.13 1.07 4.48l3.35-2.59Z"/><path fill="#EA4335" d="M12 5.99c1.47 0 2.79.5 3.83 1.5l2.86-2.86C16.96 3.01 14.7 2 12 2a10 10 0 0 0-8.93 5.52l3.35 2.59C7.2 7.75 9.4 5.99 12 5.99Z"/></svg>
               <span id="cloudGoogleSignInLabel">Sign in with Google</span>
             </button>
@@ -3947,7 +3925,7 @@
           <h2>Shared team templates</h2>
         </div>
         <ul class="record-id-required-message">
-          <li><strong>Sign in with Google</strong> using the work email your admin added to the team. That's all it takes to connect. Sign in again later to pick up any new team you were added to.</li>
+          <li><strong>Sign in with Google</strong> using the work email your admin added to the team. That's all it takes. You get every team that email is on, and teams you're added to later show up on their own.</li>
           <li><strong>Shared team templates</strong> come from your team's cloud account, so everyone connected to the same team sees the same templates. They're read-only here — an admin manages them centrally.</li>
           <li><strong>Local templates</strong> are your own, saved only in this browser. You can create and edit them freely, and no one else sees them.</li>
           <li><strong>Update</strong> pulls the latest shared templates from the cloud — use it after your admin adds or changes something.</li>

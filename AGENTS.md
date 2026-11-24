@@ -177,6 +177,11 @@ Source of truth:
   origin (`manifest.json` `externally_connectable`), verifies each key via
   `/api/v1/extension/me`, and merges into `popupCloudAuthList`. Open popups
   react through `chrome.storage.onChanged`.
+- Sign-in returns every team the email is on (no cap). Once connected, the
+  sign-in button hides; on popup open (at most every 5 min,
+  `TIMING.popup.cloudTeamDiscoveryIntervalMs`) the popup calls
+  `POST /api/v1/extension/teams/sync` with a Google sign-in key to pick up
+  teams the person was added to later (`popupCloudTeamDiscoveryAt`).
 - Manual keys are retired (2026-11-25): no paste UI in the extension and no
   key creation on the website. Keys pasted before then keep working.
 

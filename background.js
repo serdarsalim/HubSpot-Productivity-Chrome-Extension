@@ -312,7 +312,6 @@ chrome.storage.onChanged.addListener((changes, areaName) => {
 });
 
 const CLOUD_CONNECT_MESSAGE = "CONTACT_POINT_CONNECT";
-const MAX_CLOUD_ORG_CONNECTIONS = 5;
 
 function getCloudSiteOrigin() {
   try {
@@ -339,8 +338,7 @@ async function connectCloudFromWebsite(message) {
   const incoming = Array.isArray(message?.connections) ? message.connections : [];
   const tokens = incoming
     .map((item) => String(item?.token || "").trim())
-    .filter((token) => token.startsWith("cpt_"))
-    .slice(0, MAX_CLOUD_ORG_CONNECTIONS);
+    .filter((token) => token.startsWith("cpt_"));
   if (!tokens.length) return { ok: false, error: "No keys received." };
 
   const stored = await chrome.storage.local.get([CLOUD_AUTH_LIST_LOCAL_KEY, CLOUD_AUTH_LOCAL_KEY]);
@@ -358,7 +356,6 @@ async function connectCloudFromWebsite(message) {
       const organizationId = String(me?.organization?.id || "").trim();
       if (!organizationId) continue;
       const previous = byOrgId.get(organizationId);
-      if (!previous && byOrgId.size >= MAX_CLOUD_ORG_CONNECTIONS) continue;
       byOrgId.set(organizationId, {
         apiToken,
         apiBaseUrl: DEFAULT_CLOUD_API_BASE_URL,

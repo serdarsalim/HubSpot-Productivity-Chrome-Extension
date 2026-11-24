@@ -22,7 +22,8 @@
       messageRetryAttempts: 5,
       messageRetryDelayMs: 700,
       contactTabPostLoadDelayMs: 1200,
-      emailComposerReadyDelayMs: 900
+      emailComposerReadyDelayMs: 900,
+      cloudTeamDiscoveryIntervalMs: 5 * 60 * 1000
     }),
     content: Object.freeze({
       tableScrollDelayMs: 240,
@@ -143,8 +144,6 @@
     addCloudAuthBtn: document.getElementById("addCloudAuthBtn"),
     cloudGoogleRow: document.getElementById("cloudGoogleRow"),
     cloudGoogleSignInBtn: document.getElementById("cloudGoogleSignInBtn"),
-    cloudGoogleSignInLabel: document.getElementById("cloudGoogleSignInLabel"),
-    cloudGoogleHint: document.getElementById("cloudGoogleHint"),
     cloudConnectionStatusEl: document.getElementById("cloudConnectionStatus"),
     cloudTokenInfoBtn: document.getElementById("cloudTokenInfoBtn"),
     cloudTokenInfoOverlay: document.getElementById("cloudTokenInfoOverlay"),
@@ -199,6 +198,7 @@
   const CLOUD_AUTH_LOCAL_KEY = "popupCloudAuth";
   const CLOUD_AUTH_LIST_LOCAL_KEY = "popupCloudAuthList";
   const CLOUD_ACTIVE_ORG_ID_LOCAL_KEY = "popupCloudActiveOrganizationId";
+  const CLOUD_TEAM_DISCOVERY_AT_LOCAL_KEY = "popupCloudTeamDiscoveryAt";
   const HUBSPOT_URL_PATTERNS = Object.freeze(["https://*.hubspot.com/*"]);
   const HUBSPOT_FALLBACK_ORIGIN = "https://app.hubspot.com";
   const CLOUD_EMAIL_CACHE_PREFIX = "popupCloudEmailTemplates::";
@@ -208,7 +208,6 @@
   const CLOUD_TEMPLATE_ID_PREFIX = "cloud_";
   const CLOUD_API_BASE_URL = String(shared.CLOUD_API_BASE_URL || "https://contactpoint.vercel.app").trim();
   const CLOUD_CACHE_TTL_MS = 24 * 60 * 60 * 1000;
-  const MAX_CLOUD_ORG_CONNECTIONS = 5;
   const SELECTED_KEYS_SESSION_KEY = "popupSelectedContactKeys";
   const LEGACY_NOTE_TEXT = "Reached out on WhatsApp";
   const DEFAULT_EMAIL_TEMPLATE = {
@@ -1541,6 +1540,7 @@
     CLOUD_AUTH_LOCAL_KEY,
     CLOUD_AUTH_LIST_LOCAL_KEY,
     CLOUD_ACTIVE_ORG_ID_LOCAL_KEY,
+    CLOUD_TEAM_DISCOVERY_AT_LOCAL_KEY,
     HUBSPOT_URL_PATTERNS,
     HUBSPOT_FALLBACK_ORIGIN,
     CLOUD_EMAIL_CACHE_PREFIX,
@@ -1550,7 +1550,6 @@
     CLOUD_TEMPLATE_ID_PREFIX,
     CLOUD_API_BASE_URL,
     CLOUD_CACHE_TTL_MS,
-    MAX_CLOUD_ORG_CONNECTIONS,
     SELECTED_KEYS_SESSION_KEY,
     LEGACY_NOTE_TEXT,
     DEFAULT_EMAIL_TEMPLATE,

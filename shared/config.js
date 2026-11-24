@@ -9,7 +9,9 @@
       messageRetryAttempts: 5,
       messageRetryDelayMs: 700,
       contactTabPostLoadDelayMs: 1200,
-      emailComposerReadyDelayMs: 900
+      emailComposerReadyDelayMs: 900,
+      // How often the popup asks the website for teams added since sign-in.
+      cloudTeamDiscoveryIntervalMs: 5 * 60 * 1000
     }),
     content: Object.freeze({
       tableScrollDelayMs: 240,

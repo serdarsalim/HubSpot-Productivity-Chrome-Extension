@@ -59,13 +59,9 @@
     return Array.isArray(state.cloud.authList) ? state.cloud.authList.length : 0;
   }
 
-  function canAddMoreCloudRows() {
-    return getCloudConnectionCount() + cloudPendingRows.length < constants.MAX_CLOUD_ORG_CONNECTIONS;
-  }
-
   function canShowAddMoreButton() {
     if (cloudPendingRows.length > 0) return false;
-    return canAddMoreCloudRows();
+    return true;
   }
 
   function createCloudPendingRow() {
@@ -79,27 +75,10 @@
   }
 
   function renderCloudGoogleSignIn() {
+    // Once connected, sign-in disappears: teams added later are picked up
+    // automatically when the popup opens (discoverNewCloudTeams).
     const connected = getCloudConnectionCount() > 0;
-    // Signed in: shrink to a small link under the team cards. It stays because
-    // signing in again is how someone picks up a team they were added to later.
-    if (dom.cloudGoogleRow && dom.cloudAuthCardsEl) {
-      dom.cloudGoogleRow.classList.toggle("is-connected", connected);
-      if (connected) dom.cloudAuthCardsEl.after(dom.cloudGoogleRow);
-      else dom.cloudAuthCardsEl.before(dom.cloudGoogleRow);
-    }
-    if (dom.cloudGoogleSignInBtn) {
-      dom.cloudGoogleSignInBtn.classList.toggle("primary", !connected);
-      dom.cloudGoogleSignInBtn.classList.toggle("is-compact", connected);
-    }
-    if (dom.cloudGoogleSignInLabel) {
-      dom.cloudGoogleSignInLabel.textContent = connected ? "Added to another team? Sign in again" : "Sign in with Google";
-    }
-    if (dom.cloudGoogleSignInBtn) {
-      dom.cloudGoogleSignInBtn.title = connected
-        ? "Picks up any team your admin added you to since you last signed in"
-        : "Connect your team's shared templates";
-    }
-    if (dom.cloudGoogleHint) dom.cloudGoogleHint.hidden = connected;
+    if (dom.cloudGoogleRow) dom.cloudGoogleRow.hidden = connected;
   }
 
   async function startCloudGoogleSignIn() {
@@ -307,12 +286,7 @@
     renderCloudGoogleSignIn();
     if (dom.addCloudAuthBtn) {
       const hasConnections = getCloudConnectionCount() > 0;
-      dom.addCloudAuthBtn.disabled = !canAddMoreCloudRows();
-      dom.addCloudAuthBtn.textContent = !canAddMoreCloudRows()
-        ? "Max 5 org keys"
-        : hasConnections
-          ? "Paste another team key"
-          : "Paste a key instead";
+      dom.addCloudAuthBtn.textContent = hasConnections ? "Paste another team key" : "Paste a key instead";
       dom.addCloudAuthBtn.hidden = !canShowAddMoreButton();
     }
   }
@@ -346,7 +320,7 @@
     }
   }
 
-  async function fetchCloudJson(path, token, apiBaseUrlInput, timeoutMs = 12000) {
+  async function fetchCloudJson(path, token, apiBaseUrlInput, timeoutMs = 12000, postBody = null) {
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
     const apiBaseUrl = App.normalizeCloudApiBaseUrl(apiBaseUrlInput);
@@ -354,10 +328,12 @@
 
     try {
       const response = await fetch(url, {
-        method: "GET",
+        method: postBody ? "POST" : "GET",
         headers: {
-          Authorization: `Bearer ${token}`
+          Authorization: `Bearer ${token}`,
+          ...(postBody ? { "Content-Type": "application/json" } : {})
         },
+        ...(postBody ? { body: JSON.stringify(postBody) } : {}),
         signal: controller.signal
       });
       const payload = (await response.json().catch(() => null)) || {};
@@ -1430,11 +1406,6 @@
       return;
     }
 
-    if (getCloudConnectionCount() >= constants.MAX_CLOUD_ORG_CONNECTIONS && !findCloudAuthByOrgId(target)) {
-      App.setStatus("You can connect up to 5 org keys.");
-      return;
-    }
-
     renderCloudConnectionStatus("Checking access key...");
     App.setStatus("Checking team access key...");
 
@@ -1509,10 +1480,6 @@
       App.setStatus("Connect the current key first.");
       return;
     }
-    if (!canAddMoreCloudRows()) {
-      App.setStatus("You can connect up to 5 org keys.");
-      return;
-    }
     cloudPendingRows.push(createCloudPendingRow());
     renderCloudAuthCards();
   }
@@ -1577,8 +1544,66 @@
     App.setStatus(next?.templatesPaused ? "Team templates hidden." : "Team templates shown.");
   }
 
+  // Asks the website for teams this person was added to after signing in, so
+  // they never have to sign in again. Only Google sign-in keys get answers;
+  // pasted keys are skipped by the server.
+  async function discoverNewCloudTeams() {
+    const authList = normalizeCloudAuthList(state.cloud.authList);
+    if (!authList.length) return [];
+
+    const intervalMs = Number(App.timing?.popup?.cloudTeamDiscoveryIntervalMs || 5 * 60 * 1000);
+    const stored = await chrome.storage.local.get(constants.CLOUD_TEAM_DISCOVERY_AT_LOCAL_KEY);
+    const lastAt = Number(stored?.[constants.CLOUD_TEAM_DISCOVERY_AT_LOCAL_KEY] || 0);
+    if (Date.now() - lastAt < intervalMs) return [];
+    await chrome.storage.local.set({ [constants.CLOUD_TEAM_DISCOVERY_AT_LOCAL_KEY]: Date.now() });
+
+    const connectedOrganizationIds = authList.map((auth) => auth.organizationId);
+    for (const auth of authList) {
+      let result = null;
+      try {
+        result = await fetchCloudJson("/api/v1/extension/teams/sync", auth.apiToken, auth.apiBaseUrl, 12000, {
+          connectedOrganizationIds
+        });
+      } catch {
+        continue;
+      }
+      if (result?.code === "not_google_sign_in") continue;
+
+      const additions = (Array.isArray(result?.connections) ? result.connections : [])
+        .map((item) =>
+          App.normalizeCloudAuth({
+            apiToken: item?.token,
+            apiBaseUrl: auth.apiBaseUrl,
+            organizationId: item?.organizationId,
+            organizationName: item?.organizationName,
+            organizationSlug: item?.organizationSlug,
+            tokenPrefix: item?.tokenPrefix,
+            updatedAt: new Date().toISOString()
+          })
+        )
+        .filter((item) => item && !connectedOrganizationIds.includes(item.organizationId));
+      if (!additions.length) return [];
+
+      state.cloud.authList = normalizeCloudAuthList([...authList, ...additions]);
+      await persistCloudAuthState();
+      return additions;
+    }
+    return [];
+  }
+
   async function refreshCloudTemplatesSessionCheck() {
+    const added = await discoverNewCloudTeams().catch((error) => {
+      console.error("Could not check for new teams", error);
+      return [];
+    });
     await refreshCloudTemplates({ force: false, showToast: false, silent: true });
+    if (added.length) {
+      renderCloudConnectionStatus();
+      renderCloudAuthCards();
+      rerenderTemplateViewsForCloudChange();
+      const names = added.map((auth) => auth.organizationName || "a new team").join(", ");
+      if (typeof App.showToast === "function") App.showToast(`You were added to ${names}. Its templates are ready.`, 3200);
+    }
   }
 
   async function onCloudAuthCardsClick(event) {
