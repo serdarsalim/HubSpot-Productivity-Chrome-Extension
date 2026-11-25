@@ -180,6 +180,18 @@ Source of truth:
   or WhatsApp popover) opens in HubSpot. No input; fire and forget.
 - `TRACK_CLOUD_TEMPLATE_USE`: records a cloud template send.
 
+## Website -> Extension: Load HubSpot Properties
+
+- The website's Fields page sends
+  `{ type: "CONTACT_POINT_LOAD_HUBSPOT_PROPERTIES", expectedPortalId }` via
+  `externally_connectable`. Background (origin-checked) picks an open
+  HubSpot tab (linked account first, then active, then most recent) and
+  relays `GET_HUBSPOT_PROPERTIES` to its content script.
+- Response: `{ ok, portalId, defs: [{ name, label, type, fieldType, group,
+  hidden, hubspotDefined, options: [{ value, label }] }] }` or
+  `{ ok: false, code }` with `no_hubspot_tab`, `reload_hubspot_tab`,
+  `no_portal`, `not_signed_in`, `fetch_failed`.
+
 ## Cloud Template Freshness
 
 - Content script reads cloud templates only from the `chrome.storage.local`

@@ -13,7 +13,8 @@
     OPEN_OR_FOCUS_CONTACT_TAB: "OPEN_OR_FOCUS_CONTACT_TAB",
     OPEN_OR_REUSE_WHATSAPP_TAB: "OPEN_OR_REUSE_WHATSAPP_TAB",
     TRACK_CLOUD_TEMPLATE_USE: "TRACK_CLOUD_TEMPLATE_USE",
-    REFRESH_CLOUD_TEMPLATES: "REFRESH_CLOUD_TEMPLATES"
+    REFRESH_CLOUD_TEMPLATES: "REFRESH_CLOUD_TEMPLATES",
+    GET_HUBSPOT_PROPERTIES: "GET_HUBSPOT_PROPERTIES"
   });
   const TIMING = shared.TIMING?.content || Object.freeze({
     tableScrollDelayMs: 240,
@@ -1870,7 +1871,8 @@
   }
 
   function getHubSpotPortalId() {
-    const match = String(location.pathname || "").match(/\/contacts\/(\d+)\//);
+    const path = String(location.pathname || "");
+    const match = path.match(/\/contacts\/(\d+)\//) || path.match(/^\/[a-z0-9-]+\/(\d{4,})(?:\/|$)/i);
     return match ? match[1] : "";
   }
 
@@ -5754,6 +5756,22 @@
         sendResponse({ ok: false, error: String(error) });
       }
       return;
+    }
+
+    // From the website's Fields page (relayed by background): the account's
+    // property list, read fresh through this tab's HubSpot session.
+    if (message.type === MESSAGE_TYPES.GET_HUBSPOT_PROPERTIES) {
+      const portalId = getHubSpotPortalId();
+      if (!portalId) {
+        sendResponse({ ok: false, code: "no_portal" });
+        return;
+      }
+      fetchHubSpotPropertyDefinitions({ force: true })
+        .then((defs) =>
+          defs ? sendResponse({ ok: true, portalId, defs }) : sendResponse({ ok: false, code: "not_signed_in", portalId })
+        )
+        .catch((error) => sendResponse({ ok: false, code: "fetch_failed", portalId, error: String(error?.message || error) }));
+      return true;
     }
 
     if (message.type === MESSAGE_TYPES.GET_PORTAL_ID) {

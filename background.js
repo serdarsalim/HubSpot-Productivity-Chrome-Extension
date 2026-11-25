@@ -313,6 +313,8 @@ chrome.storage.onChanged.addListener((changes, areaName) => {
 });
 
 const CLOUD_CONNECT_MESSAGE = "CONTACT_POINT_CONNECT";
+const LOAD_HUBSPOT_PROPERTIES_MESSAGE = "CONTACT_POINT_LOAD_HUBSPOT_PROPERTIES";
+const GET_HUBSPOT_PROPERTIES_MESSAGE = "GET_HUBSPOT_PROPERTIES";
 const CLOUD_IDENTITY_LOCAL_KEY = "popupCloudIdentity";
 const CLOUD_LEFT_ORG_IDS_LOCAL_KEY = "popupCloudLeftOrgIds";
 
@@ -398,10 +400,62 @@ async function connectCloudFromWebsite(message) {
   return { ok: true, connected };
 }
 
+function portalIdFromHubSpotUrl(url) {
+  try {
+    const path = new URL(url).pathname;
+    const match = path.match(/^\/[a-z0-9-]+\/(\d{4,})(?:\/|$)/i);
+    return match ? match[1] : "";
+  } catch {
+    return "";
+  }
+}
+
+// Website Fields page: "Load from HubSpot". Reads the property list from an
+// open HubSpot tab (the team's linked account first), since only a page on
+// HubSpot carries the person's HubSpot session.
+async function loadHubSpotPropertiesForWebsite(message) {
+  const expectedPortalId = String(message?.expectedPortalId || "").trim();
+  const tabs = await chrome.tabs.query({ url: ["https://*.hubspot.com/*"] });
+  const candidates = tabs
+    .filter((tab) => tab.id && portalIdFromHubSpotUrl(tab.url || ""))
+    .sort((a, b) => {
+      const score = (tab) =>
+        (expectedPortalId && portalIdFromHubSpotUrl(tab.url || "") === expectedPortalId ? 2 : 0) + (tab.active ? 1 : 0);
+      return score(b) - score(a) || Number(b.lastAccessed || 0) - Number(a.lastAccessed || 0);
+    });
+  if (!candidates.length) return { ok: false, code: "no_hubspot_tab" };
+
+  let lastFailure = { ok: false, code: "no_hubspot_tab" };
+  for (const tab of candidates) {
+    try {
+      const response = await chrome.tabs.sendMessage(tab.id, { type: GET_HUBSPOT_PROPERTIES_MESSAGE });
+      if (response?.ok) return response;
+      lastFailure = response || lastFailure;
+    } catch {
+      // Tab opened before the extension was installed or updated.
+      lastFailure = { ok: false, code: "reload_hubspot_tab" };
+    }
+  }
+  return lastFailure;
+}
+
 chrome.runtime.onMessageExternal.addListener((message, sender, sendResponse) => {
-  if (message?.type !== CLOUD_CONNECT_MESSAGE) return false;
   const expectedOrigin = getCloudSiteOrigin();
-  if (!expectedOrigin || sender?.origin !== expectedOrigin) {
+  const trusted = Boolean(expectedOrigin) && sender?.origin === expectedOrigin;
+
+  if (message?.type === LOAD_HUBSPOT_PROPERTIES_MESSAGE) {
+    if (!trusted) {
+      sendResponse({ ok: false, error: "Unexpected sender." });
+      return false;
+    }
+    loadHubSpotPropertiesForWebsite(message)
+      .then(sendResponse)
+      .catch((error) => sendResponse({ ok: false, code: "failed", error: String(error?.message || error || "Unknown error") }));
+    return true;
+  }
+
+  if (message?.type !== CLOUD_CONNECT_MESSAGE) return false;
+  if (!trusted) {
     sendResponse({ ok: false, error: "Unexpected sender." });
     return false;
   }
