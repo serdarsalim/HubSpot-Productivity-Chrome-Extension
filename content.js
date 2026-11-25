@@ -2510,7 +2510,7 @@
         right: 10px;
         bottom: 10px;
         left: 10px;
-        z-index: 1;
+        z-index: 40; /* above the list, which is z-index 30 */
         border: 1px solid #dfe3eb;
         border-radius: 8px;
         background: #ffffff;
