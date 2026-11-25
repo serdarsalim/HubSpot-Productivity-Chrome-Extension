@@ -91,6 +91,8 @@ Main domain scope is `https://app.hubspot.com/*`.
   - TinyMCE bodies (email, note): `setupTinyMceEditor(editor, { onChange })`
     converts `[key]` <-> chip spans on BeforeSetContent/GetContent, adds the
     "@" autocompleter (Enter/Tab pick) and puts `[key]` on the clipboard.
+    Tab clicks TinyMCE's `.tox-autocompleter .tox-collection__item--active`
+    row (TinyMCE markup: recheck after a TinyMCE upgrade; Enter is native).
     Code that reads editor DOM text uses `textWithTokens(node)` (a chip's
     `textContent` is its label); the email link dialog does
   - Plain fields (WhatsApp body, email subject): `attachTextField(textarea,
