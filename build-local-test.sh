@@ -1,13 +1,13 @@
 #!/bin/zsh
 # Builds a copy of the extension that talks to the website running on
-# http://localhost:3000 instead of production, for testing cloud features
+# http://localhost:3008 instead of production, for testing cloud features
 # (Google sign-in, team templates) before deploying. Load `local-test/` as an
 # unpacked extension in chrome://extensions. Repo files are not changed.
 set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "$0")" && pwd)"
 OUTPUT_DIR="$ROOT_DIR/local-test"
-LOCAL_URL="${1:-http://localhost:3000}"
+LOCAL_URL="${1:-http://localhost:3008}"
 
 "$ROOT_DIR/build-shareable.sh" >/dev/null
 rm -rf "$OUTPUT_DIR"
