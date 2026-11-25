@@ -78,7 +78,10 @@
         toolbar: NOTE_TINYMCE_TOOLBAR_ORDER,
         skin: "oxide",
         content_css: "default",
+        content_style: App.tokenFields?.tinyMceContentStyle || "",
         setup(editor) {
+          // "@" inserts field chips; the saved body keeps [key].
+          App.tokenFields?.setupTinyMceEditor(editor, { onChange: () => upsertActiveNoteTemplateFromForm() });
           editor.on("change input undo redo keyup", () => {
             if (state.syncingNoteTemplateForm) return;
             upsertActiveNoteTemplateFromForm();

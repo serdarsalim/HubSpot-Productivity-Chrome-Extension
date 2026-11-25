@@ -265,7 +265,9 @@
       if (anchor) {
         anchor.setAttribute("href", href);
         if (typeof rawText === "string" && rawText.trim()) {
-          anchor.textContent = rawText.trim();
+          // `[email]` in the Text box comes back as a chip.
+          if (App.tokenFields) editor.dom.setHTML(anchor, App.tokenFields.textToChipHtml(rawText.trim()));
+          else anchor.textContent = rawText.trim();
         }
         return;
       }
@@ -300,7 +302,8 @@
   function openLinkDialog(editor, nodeHint = null) {
     const anchor = getSelectedAnchor(editor, nodeHint);
     const selectedText = String(editor.selection?.getContent({ format: "text" }) || "").trim();
-    const anchorText = String(anchor?.textContent || "").trim();
+    // Chips read as `[key]` here; their label would be saved back as text.
+    const anchorText = String((App.tokenFields ? App.tokenFields.textWithTokens(anchor) : anchor?.textContent) || "").trim();
     const anchorHref = String(anchor?.getAttribute("href") || "").trim();
     const initialHref = anchorHref || "https://";
     const initialText = anchorText || selectedText;
@@ -548,8 +551,10 @@
         toolbar: TINYMCE_TOOLBAR_ORDER,
         skin: "oxide",
         content_css: "default",
-        content_style: "a[href] { cursor: pointer; }",
+        content_style: `a[href] { cursor: pointer; }${App.tokenFields?.tinyMceContentStyle || ""}`,
         setup(editor) {
+          // "@" inserts field chips; the saved body keeps [key].
+          App.tokenFields?.setupTinyMceEditor(editor, { onChange: () => upsertActiveTemplateFromForm() });
           editor.ui.registry.addButton("cp_link", {
             icon: "link",
             tooltip: "Link",

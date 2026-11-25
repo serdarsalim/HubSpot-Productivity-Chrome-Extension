@@ -243,6 +243,24 @@
     return String(html).replace(CHIP_SPAN_RE, (_match, key) => `[${key}]`);
   }
 
+  // A rich editor node's text with each chip as `[key]` (textContent would
+  // give the label, and writing that back loses the field).
+  function textWithTokens(node) {
+    if (!node) return "";
+    if (node.nodeType === 3) return node.data;
+    if (node.nodeType !== 1 && node.nodeType !== 11) return "";
+    const key = node.nodeType === 1 ? node.getAttribute("data-token") : "";
+    if (key && KEY_RE.test(key)) return `[${key}]`;
+    let text = "";
+    for (const child of node.childNodes) text += textWithTokens(child);
+    return text;
+  }
+
+  // Plain text -> rich editor HTML, known `[key]`s as chips.
+  function textToChipHtml(text) {
+    return tokensToHtml(escapeHtml(text), currentMap);
+  }
+
   const searchFoldCache = new WeakMap();
 
   function searchFolds(variable) {
@@ -410,6 +428,27 @@
     return null;
   }
 
+  // The selection as plain text with chips as `[key]`. Laid out off-screen
+  // the way TinyMCE does it, because innerText needs layout to turn
+  // paragraphs into line breaks.
+  function selectionTextWithTokens(editor) {
+    const rng = editor.selection?.getRng?.();
+    if (!rng || rng.collapsed) return "";
+    const doc = editor.getDoc();
+    const bin = doc.createElement("div");
+    bin.setAttribute("data-mce-bogus", "all");
+    bin.style.cssText = "position: fixed; left: -9999999px; top: 0;";
+    bin.appendChild(rng.cloneContents());
+    for (const chip of bin.querySelectorAll("[data-token]")) {
+      const key = chip.getAttribute("data-token");
+      if (KEY_RE.test(key)) chip.replaceWith(doc.createTextNode(`[${key}]`));
+    }
+    editor.getBody().appendChild(bin);
+    const text = bin.innerText;
+    bin.remove();
+    return text.replace(/[​﻿]/g, "");
+  }
+
   // `[email]` typed by hand becomes a chip the moment its bracket closes.
   function convertTypedTokenAtCaret(editor) {
     const rng = editor.selection?.getRng?.();
@@ -491,6 +530,21 @@
     editor.on("input", (event) => {
       if (event?.inputType !== "insertText" || event?.data !== "]") return;
       if (convertTypedTokenAtCaret(editor)) onChange?.();
+    });
+    // TinyMCE writes the clipboard's plain text from what chips SHOW, so a
+    // copy pasted into the WhatsApp editor would arrive as "First name". Copy
+    // and cut bubble from the body up to the window after TinyMCE has filled
+    // the clipboard; swap the stored form in there. (Its HTML copy already
+    // carries `[key]`, through GetContent.)
+    editor.on("init", () => {
+      const putStoredText = (event) => {
+        if (!event.defaultPrevented || !event.clipboardData) return;
+        const text = selectionTextWithTokens(editor);
+        if (text) event.clipboardData.setData("text/plain", text);
+      };
+      const win = editor.getWin();
+      win.addEventListener("copy", putStoredText);
+      win.addEventListener("cut", putStoredText);
     });
     editor.on("focus", refreshIfPortalChanged);
     editor.on("blur", () => {
@@ -1190,6 +1244,8 @@
     tokenChipHtml,
     tokensToHtml,
     htmlToTokens,
+    textWithTokens,
+    textToChipHtml,
     matchTokenVariables,
     atFragment,
     // Field list
