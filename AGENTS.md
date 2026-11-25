@@ -408,8 +408,9 @@ Manual smoke test:
   hotfix needs its own number.
 - Build the package: `./build-shareable.sh` writes `shareable/`, then zip it
   to `contact-pointshareable.zip`. Both are gitignored.
-- `./publish-webstore.sh` builds, uploads and publishes to the Web Store
-  (`--draft` stages without going live). Serdar runs the publish himself.
+- `./publish-webstore.sh --yes` builds, uploads and publishes to the Web
+  Store (`--draft` stages without going live). Agents run it themselves once
+  a release is pushed; never ask Serdar to publish by hand (set 2026-11-25).
 
 ## Git/Repo Notes
 
