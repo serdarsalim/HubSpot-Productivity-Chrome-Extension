@@ -187,23 +187,7 @@
   }
 
   function splitCloudTemplatesByType(templates) {
-    const email = [];
-    const whatsapp = [];
-    const note = [];
-    const source = Array.isArray(templates) ? templates : [];
-
-    for (const template of source) {
-      const type = String(template?.type || "").toUpperCase();
-      if (type === "EMAIL") {
-        email.push(template);
-      } else if (type === "WHATSAPP") {
-        whatsapp.push(template);
-      } else if (type === "NOTE") {
-        note.push(template);
-      }
-    }
-
-    return { email, whatsapp, note };
+    return globalThis.ContactPilotShared.cloudTemplates.splitByType(templates);
   }
 
   // The Templates tab reopens whichever template type you used last
@@ -1249,21 +1233,7 @@
   }
 
   function shouldPerformFullCloudSync(localMeta, remoteMeta, hasCachedTemplates, force) {
-    if (force) return true;
-    if (!hasCachedTemplates) return true;
-
-    const localLatest = String(localMeta?.latestUpdatedAt || "");
-    const remoteLatest = String(remoteMeta?.latestUpdatedAt || "");
-    const localCount = Number(localMeta?.templateCount || 0);
-    const remoteCount = Number(remoteMeta?.templateCount || 0);
-    if (localLatest !== remoteLatest || localCount !== remoteCount) {
-      return true;
-    }
-
-    const lastFullSyncAt = String(localMeta?.lastFullSyncAt || "");
-    const lastFullSyncMs = Date.parse(lastFullSyncAt);
-    if (!Number.isFinite(lastFullSyncMs)) return true;
-    return Date.now() - lastFullSyncMs >= constants.CLOUD_CACHE_TTL_MS;
+    return globalThis.ContactPilotShared.cloudTemplates.needsFullSync(localMeta, remoteMeta, hasCachedTemplates, force);
   }
 
   async function refreshCloudTemplates(options = {}) {

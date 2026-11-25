@@ -33,8 +33,11 @@ Main domain scope is `https://app.hubspot.com/*`.
   - `web_accessible_resources`: `vendor/flags/*.svg` on HubSpot pages
 
 - `background.js`
+  - Loads `shared/config.js` and `shared/cloudTemplates.js` via `importScripts`
   - Handles toolbar click
   - Opens/focuses a dedicated popup window running `popup.html`
+  - Refreshes cloud template caches on `REFRESH_CLOUD_TEMPLATES` (see Cloud
+    Template Freshness)
 
 - `popup.html`
   - Entire UI (contacts page, active tab page, settings page, notes modal, template pages, picker overlays)
@@ -42,19 +45,20 @@ Main domain scope is `https://app.hubspot.com/*`.
     1. `shared/messages.js`
     2. `shared/config.js`
     3. `shared/countries.js`
-    4. `vendor/tinymce/tinymce.min.js`
-    5. `popup/core.js`
-    6. `popup/analytics.js`
-    7. `popup/hubspotApi.js`
-    8. `popup/settings.js`
-    9. `popup/emailTemplates.js`
-    10. `popup/whatsappTemplates.js`
-    11. `popup/noteTemplates.js`
-    12. `popup/activeTabView.js`
-    13. `popup/notesFlow.js`
-    14. `popup/contactsView.js`
-    15. `popup/exportUtils.js`
-    16. `popup.js` (bootstrap/events only)
+    4. `shared/cloudTemplates.js`
+    5. `vendor/tinymce/tinymce.min.js`
+    6. `popup/core.js`
+    7. `popup/analytics.js`
+    8. `popup/hubspotApi.js`
+    9. `popup/settings.js`
+    10. `popup/emailTemplates.js`
+    11. `popup/whatsappTemplates.js`
+    12. `popup/noteTemplates.js`
+    13. `popup/activeTabView.js`
+    14. `popup/notesFlow.js`
+    15. `popup/contactsView.js`
+    16. `popup/exportUtils.js`
+    17. `popup.js` (bootstrap/events only)
 
 - `popup.js`
   - Thin bootstrap/event wiring only
@@ -129,6 +133,11 @@ Main domain scope is `https://app.hubspot.com/*`.
   - Flag assets: `vendor/flags/<iso>.svg` (flag-icons). Not Unicode emoji,
     which render as bare letters on Windows/Chrome
 
+- `shared/cloudTemplates.js`
+  - Cloud template cache format shared by popup and background: cache keys,
+    `normalizeArray`, `splitByType`, `needsFullSync`. Both writers go through
+    it so content.js always reads one shape
+
 ## Message Contracts (Popup -> Content)
 
 Implemented message types:
@@ -164,6 +173,26 @@ Source of truth:
 - Define/rename types in `shared/messages.js`
 - Consume in popup modules via `App.messageTypes`
 - Consume in content script via `globalThis.ContactPilotShared.MESSAGE_TYPES`
+
+## Message Contracts (Content -> Background)
+
+- `REFRESH_CLOUD_TEMPLATES`: sent when template search (email/note composer
+  or WhatsApp popover) opens in HubSpot. No input; fire and forget.
+- `TRACK_CLOUD_TEMPLATE_USE`: records a cloud template send.
+
+## Cloud Template Freshness
+
+- Content script reads cloud templates only from the `chrome.storage.local`
+  cache and re-reads on storage changes.
+- Opening template search sends `REFRESH_CLOUD_TEMPLATES`. Background checks
+  each non-paused team at most every
+  `TIMING.background.cloudTemplateCheckIntervalMs` (60 s, via the meta key's
+  `lastCheckedAt`), calls `/api/v1/extension/templates/meta`, and downloads
+  `/api/v1/extension/templates` only when latest edit time or count differ
+  (or the copy is a day old). Errors are left for the popup to handle.
+- Website side: meta and key lookups are served from the Next data cache and
+  busted on template/key/member/org changes, so a check costs no database
+  time. Sending a template does not bump `Template.updatedAt`.
 
 ## Team Sign-In (Website -> Extension)
 
@@ -326,6 +355,8 @@ No formal test suite exists. Use:
 
 - `node --check shared/messages.js`
 - `node --check shared/config.js`
+- `node --check shared/cloudTemplates.js`
+- `node --check background.js`
 - `node --check popup.js`
 - `node --check popup/core.js`
 - `node --check popup/analytics.js`

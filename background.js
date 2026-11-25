@@ -1,4 +1,4 @@
-importScripts("shared/config.js");
+importScripts("shared/config.js", "shared/cloudTemplates.js");
 
 const ATTACHED_POPUP_PATH = "popup.html";
 const DETACHED_POPUP_PATH = "popup.html?mode=detached";
@@ -13,6 +13,7 @@ const OPEN_POPUP_WINDOW_MESSAGE = "OPEN_POPUP_WINDOW";
 const OPEN_OR_FOCUS_CONTACT_TAB_MESSAGE = "OPEN_OR_FOCUS_CONTACT_TAB";
 const OPEN_OR_REUSE_WHATSAPP_TAB_MESSAGE = "OPEN_OR_REUSE_WHATSAPP_TAB";
 const TRACK_CLOUD_TEMPLATE_USE_MESSAGE = "TRACK_CLOUD_TEMPLATE_USE";
+const REFRESH_CLOUD_TEMPLATES_MESSAGE = "REFRESH_CLOUD_TEMPLATES";
 const shared = globalThis.ContactPilotShared || {};
 const DEFAULT_CLOUD_API_BASE_URL = String(shared.CLOUD_API_BASE_URL || "https://contactpoint.vercel.app").trim();
 
@@ -410,6 +411,95 @@ chrome.runtime.onMessageExternal.addListener((message, sender, sendResponse) => 
   return true;
 });
 
+// Keeps cloud templates fresh while reps work in HubSpot, without opening the
+// popup. Asks the website whether each team's templates changed (a cached,
+// database-free answer) and downloads the full list only when they did.
+// Writing the cache keys is enough: content.js re-reads on storage changes.
+let cloudTemplateRefreshInFlight = null;
+
+async function fetchCloudJsonInBackground(baseUrl, path, apiToken) {
+  const timing = globalThis.ContactPilotShared?.TIMING?.background || {};
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), Number(timing.cloudRequestTimeoutMs || 12000));
+  try {
+    const response = await fetch(`${baseUrl}${path}`, {
+      headers: { Accept: "application/json", Authorization: `Bearer ${apiToken}` },
+      signal: controller.signal
+    });
+    if (!response.ok) throw new Error(`Cloud request failed with status ${response.status}.`);
+    return response.json();
+  } finally {
+    clearTimeout(timeoutId);
+  }
+}
+
+async function refreshOneCloudTeam(auth, intervalMs) {
+  const cloud = globalThis.ContactPilotShared.cloudTemplates;
+  const keys = cloud.cacheKeys(auth.organizationId);
+  if (!keys) return;
+  const stored = await chrome.storage.local.get([keys.metaKey, keys.emailKey, keys.whatsappKey, keys.noteKey]);
+  const localMeta = stored?.[keys.metaKey] && typeof stored[keys.metaKey] === "object" ? stored[keys.metaKey] : null;
+  const lastCheckedMs = Date.parse(String(localMeta?.lastCheckedAt || ""));
+  if (Number.isFinite(lastCheckedMs) && Date.now() - lastCheckedMs < intervalMs) return;
+
+  const baseUrl = String(auth.apiBaseUrl || DEFAULT_CLOUD_API_BASE_URL).trim().replace(/\/+$/g, "");
+  const remoteMeta = await fetchCloudJsonInBackground(baseUrl, "/api/v1/extension/templates/meta", auth.apiToken);
+  const hasCachedTemplates = [keys.emailKey, keys.whatsappKey, keys.noteKey].some((key) => Array.isArray(stored?.[key]));
+  const nowIso = new Date().toISOString();
+  const metaBase = {
+    organizationId: auth.organizationId,
+    latestUpdatedAt: remoteMeta?.latestUpdatedAt || null,
+    templateCount: Number(remoteMeta?.templateCount || 0),
+    lastCheckedAt: nowIso
+  };
+
+  if (!cloud.needsFullSync(localMeta, remoteMeta, hasCachedTemplates, false)) {
+    await chrome.storage.local.set({
+      [keys.metaKey]: { ...metaBase, lastFullSyncAt: String(localMeta?.lastFullSyncAt || nowIso) }
+    });
+    return;
+  }
+
+  const payload = await fetchCloudJsonInBackground(baseUrl, "/api/v1/extension/templates", auth.apiToken);
+  const split = cloud.splitByType(payload?.templates);
+  await chrome.storage.local.set({
+    [keys.emailKey]: cloud.normalizeArray(split.email, "EMAIL", auth.organizationId),
+    [keys.whatsappKey]: cloud.normalizeArray(split.whatsapp, "WHATSAPP", auth.organizationId),
+    [keys.noteKey]: cloud.normalizeArray(split.note, "NOTE", auth.organizationId),
+    [keys.metaKey]: { ...metaBase, lastFullSyncAt: nowIso }
+  });
+}
+
+async function refreshCloudTemplatesInBackground() {
+  const timing = globalThis.ContactPilotShared?.TIMING?.background || {};
+  const intervalMs = Number(timing.cloudTemplateCheckIntervalMs || 60 * 1000);
+  const stored = await chrome.storage.local.get([CLOUD_AUTH_LIST_LOCAL_KEY]);
+  const rawList = Array.isArray(stored?.[CLOUD_AUTH_LIST_LOCAL_KEY]) ? stored[CLOUD_AUTH_LIST_LOCAL_KEY] : [];
+  const pausedOrgIds = new Set(
+    rawList.filter((item) => item?.templatesPaused === true).map((item) => String(item?.organizationId || "").trim())
+  );
+  const targets = normalizeCloudAuthList(rawList, null).filter((auth) => !pausedOrgIds.has(auth.organizationId));
+
+  // Errors (offline, revoked key) are left for the popup, which already knows
+  // how to disconnect a team and explain it.
+  await Promise.all(
+    targets.map((auth) =>
+      refreshOneCloudTeam(auth, intervalMs).catch((error) => {
+        console.warn("Cloud template check failed", auth.organizationId, error);
+      })
+    )
+  );
+}
+
+function requestCloudTemplateRefresh() {
+  if (!cloudTemplateRefreshInFlight) {
+    cloudTemplateRefreshInFlight = refreshCloudTemplatesInBackground().finally(() => {
+      cloudTemplateRefreshInFlight = null;
+    });
+  }
+  return cloudTemplateRefreshInFlight;
+}
+
 chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
   if (message?.type === OPEN_POPUP_WINDOW_MESSAGE) {
     openOrFocusPopupWindow()
@@ -427,6 +517,13 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
 
   if (message?.type === OPEN_OR_REUSE_WHATSAPP_TAB_MESSAGE) {
     openOrReuseWhatsappTab(message?.url, _sender)
+      .then(() => sendResponse({ ok: true }))
+      .catch((error) => sendResponse({ ok: false, error: String(error?.message || error || "Unknown error") }));
+    return true;
+  }
+
+  if (message?.type === REFRESH_CLOUD_TEMPLATES_MESSAGE) {
+    requestCloudTemplateRefresh()
       .then(() => sendResponse({ ok: true }))
       .catch((error) => sendResponse({ ok: false, error: String(error?.message || error || "Unknown error") }));
     return true;

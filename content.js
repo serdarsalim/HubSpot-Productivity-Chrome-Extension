@@ -12,7 +12,8 @@
     OPEN_EMAIL_AND_APPLY_TEMPLATE_ON_PAGE: "OPEN_EMAIL_AND_APPLY_TEMPLATE_ON_PAGE",
     OPEN_OR_FOCUS_CONTACT_TAB: "OPEN_OR_FOCUS_CONTACT_TAB",
     OPEN_OR_REUSE_WHATSAPP_TAB: "OPEN_OR_REUSE_WHATSAPP_TAB",
-    TRACK_CLOUD_TEMPLATE_USE: "TRACK_CLOUD_TEMPLATE_USE"
+    TRACK_CLOUD_TEMPLATE_USE: "TRACK_CLOUD_TEMPLATE_USE",
+    REFRESH_CLOUD_TEMPLATES: "REFRESH_CLOUD_TEMPLATES"
   });
   const TIMING = shared.TIMING?.content || Object.freeze({
     tableScrollDelayMs: 240,
@@ -2998,6 +2999,7 @@
     // Email and note can mount together and share the same template load.
     if (!composerTemplateSearchState.refreshKicked) {
       composerTemplateSearchState.refreshKicked = true;
+      requestCloudTemplateRefresh();
       void refreshContactTemplateData().finally(() => {
         composerTemplateSearchState.refreshKicked = false;
         void refreshComposerFavorites("email");
@@ -3265,6 +3267,7 @@
     window.addEventListener("scroll", waTemplatePopoverState.scrollHandler, true);
 
     renderWaTemplatePopoverList();
+    requestCloudTemplateRefresh();
     void refreshContactTemplateData().then(() => {
       if (waTemplatePopoverState.open) renderWaTemplatePopoverList();
     });
@@ -5079,6 +5082,16 @@
     const organizationId = cleanText(organizationIdInput || "");
     if (!organizationId) return null;
     return (contactTemplateState.cloudAuthList || []).find((item) => cleanText(item?.organizationId || "") === organizationId) || null;
+  }
+
+  // Background checks the website for template changes (throttled per team);
+  // new templates arrive through the storage listener above.
+  function requestCloudTemplateRefresh() {
+    try {
+      void chrome.runtime.sendMessage({ type: MESSAGE_TYPES.REFRESH_CLOUD_TEMPLATES }).catch(() => {});
+    } catch (_error) {
+      // Extension was reloaded; this page's script is orphaned.
+    }
   }
 
   async function trackInlineCloudTemplateUse(template) {

@@ -23,6 +23,13 @@
       noteReadRetryDelayMs: 450,
       emailComposerOpenAttempts: 20,
       emailComposerOpenDelayMs: 300
+    }),
+    background: Object.freeze({
+      // Opening template search in HubSpot asks the website whether a team's
+      // templates changed, at most this often per team. The answer is served
+      // from the website's cache, so checks are cheap.
+      cloudTemplateCheckIntervalMs: 60 * 1000,
+      cloudRequestTimeoutMs: 12000
     })
   });
 })();

@@ -517,21 +517,7 @@
   }
 
   function getRawCloudTemplateId(item, organizationIdInput = "") {
-    const organizationId = String(item?.organizationId || organizationIdInput || "").trim();
-    const directCloudId = stripCloudTemplatePrefix(String(item?.cloudId || "").trim());
-    if (directCloudId) {
-      if (organizationId && directCloudId.startsWith(`${organizationId}_`)) {
-        return directCloudId.slice(organizationId.length + 1);
-      }
-      return directCloudId;
-    }
-
-    const directId = stripCloudTemplatePrefix(String(item?.id || "").trim());
-    if (!directId) return "";
-    if (organizationId && directId.startsWith(`${organizationId}_`)) {
-      return directId.slice(organizationId.length + 1);
-    }
-    return directId;
+    return globalThis.ContactPilotShared.cloudTemplates.rawTemplateId(item, organizationIdInput);
   }
 
   function normalizeCloudApiBaseUrl(value) {
@@ -563,38 +549,8 @@
   }
 
   function normalizeCloudTemplateArray(rawTemplates, expectedType, organizationIdInput = "") {
-    const templates = [];
-    const seen = new Set();
-    const source = Array.isArray(rawTemplates) ? rawTemplates : [];
-
-    for (const item of source) {
-      const organizationId = String(item?.organizationId || organizationIdInput || state.cloud?.auth?.organizationId || "").trim();
-      const baseId = getRawCloudTemplateId(item, organizationId);
-      if (!baseId) continue;
-      const compositeId = organizationId ? `${organizationId}_${baseId}` : baseId;
-      const id = `${CLOUD_TEMPLATE_ID_PREFIX}${compositeId}`;
-      if (seen.has(id)) continue;
-      seen.add(id);
-
-      const type = String(item?.type || expectedType || "").toUpperCase();
-      if (!type) continue;
-
-      templates.push({
-        id,
-        cloudId: baseId,
-        organizationId,
-        type,
-        source: "cloud",
-        readOnly: true,
-        name: String(item?.name || "").trim() || "Untitled",
-        subject: String(item?.subject || "").trim(),
-        body: String(item?.body || "").trim(),
-        createdAt: String(item?.createdAt || "").trim() || null,
-        updatedAt: String(item?.updatedAt || "").trim() || null
-      });
-    }
-
-    return templates;
+    const fallbackOrgId = String(organizationIdInput || state.cloud?.auth?.organizationId || "").trim();
+    return globalThis.ContactPilotShared.cloudTemplates.normalizeArray(rawTemplates, expectedType, fallbackOrgId);
   }
 
   function getMergedEmailTemplates() {
