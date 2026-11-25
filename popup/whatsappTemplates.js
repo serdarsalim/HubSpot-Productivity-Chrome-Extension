@@ -8,6 +8,18 @@
   let lastSavedDraftSignature = "";
   let draggedWhatsappTemplateId = "";
 
+  // Plain chip fields hold chip text while editing; read and write the
+  // stored [key] form through App.tokenFields, never .value.
+  function readStoredField(el) {
+    return App.tokenFields ? App.tokenFields.getStoredValue(el) : String(el?.value || "");
+  }
+
+  function writeStoredField(el, value) {
+    if (!el) return;
+    if (App.tokenFields) App.tokenFields.setStoredValue(el, value);
+    else el.value = value;
+  }
+
   function templatePreviewText(template) {
     return String(template?.body || "").trim();
   }
@@ -285,7 +297,7 @@
 
     state.syncingWhatsappTemplateForm = true;
     if (dom.whatsappTemplateNameInput) dom.whatsappTemplateNameInput.value = active.name || "";
-    if (dom.whatsappTemplateBodyInput) dom.whatsappTemplateBodyInput.value = active.body || "";
+    writeStoredField(dom.whatsappTemplateBodyInput, active.body || "");
     state.syncingWhatsappTemplateForm = false;
     setWhatsappEditorReadOnly(activeIsCloud);
   }
@@ -302,7 +314,7 @@
     if (!active) return;
 
     active.name = String(dom.whatsappTemplateNameInput?.value || "").trim() || "Untitled";
-    active.body = String(dom.whatsappTemplateBodyInput?.value || "").trim();
+    active.body = String(readStoredField(dom.whatsappTemplateBodyInput) || "").trim();
     renderWhatsappTemplatesList();
     scheduleWhatsappTemplateAutosave();
   }
@@ -603,6 +615,8 @@
       }
     }
   }
+
+  App.tokenFields?.attachTextField(dom.whatsappTemplateBodyInput);
 
   Object.assign(App, {
     loadWhatsappTemplatesDraftFromSettings,

@@ -27,6 +27,18 @@
   let linkDialogOutsideClickCleanup = null;
   let draggedEmailTemplateId = "";
 
+  // Plain chip fields hold chip text while editing; read and write the
+  // stored [key] form through App.tokenFields, never .value.
+  function readStoredField(el) {
+    return App.tokenFields ? App.tokenFields.getStoredValue(el) : String(el?.value || "");
+  }
+
+  function writeStoredField(el, value) {
+    if (!el) return;
+    if (App.tokenFields) App.tokenFields.setStoredValue(el, value);
+    else el.value = value;
+  }
+
   function htmlToPlainText(value) {
     const raw = String(value || "");
     if (!raw) return "";
@@ -785,7 +797,7 @@
 
     beginTemplateFormSync();
     if (dom.emailTemplateNameInput) dom.emailTemplateNameInput.value = active.name || "";
-    if (dom.emailTemplateSubjectInput) dom.emailTemplateSubjectInput.value = active.subject || "";
+    writeStoredField(dom.emailTemplateSubjectInput, active.subject || "");
     writeEmailBodyValueToForm(active.body || "");
     endTemplateFormSyncDeferred();
     setEmailEditorReadOnly(activeIsCloud);
@@ -804,7 +816,7 @@
     if (!active) return;
 
     active.name = String(dom.emailTemplateNameInput?.value || "").trim() || "Untitled";
-    active.subject = String(dom.emailTemplateSubjectInput?.value || "").trim();
+    active.subject = String(readStoredField(dom.emailTemplateSubjectInput) || "").trim();
     active.body = readEmailBodyValueFromForm();
     renderEmailTemplatesList();
     scheduleEmailTemplateAutosave();
@@ -1040,6 +1052,8 @@
       }
     }
   }
+
+  App.tokenFields?.attachTextField(dom.emailTemplateSubjectInput, { singleLine: true });
 
   Object.assign(App, {
     loadEmailTemplatesDraftFromSettings,

@@ -2783,6 +2783,164 @@
         height: 100%;
       }
 
+      /* "@" fields in the plain template editors (WhatsApp body, email
+         subject): a mirror paints label chips under a transparent textarea.
+         Both layers share every metric in .cp-token-field, the scrollbar
+         gutter included, or the caret drifts from the text. */
+      .cp-token-field-wrap {
+        position: relative;
+        min-width: 0;
+        border-radius: 10px;
+      }
+
+      .email-template-editor .field-grow > .cp-token-field-wrap {
+        display: flex;
+        flex-direction: column;
+        flex: 1;
+        min-height: 0;
+      }
+
+      .cp-token-field {
+        box-sizing: border-box;
+        width: 100%;
+        margin: 0;
+        padding: 10px;
+        border: 1px solid var(--line);
+        border-radius: 10px;
+        font-family: inherit;
+        font-size: 14px;
+        font-weight: 400;
+        font-style: normal;
+        line-height: 1.4;
+        letter-spacing: normal;
+        word-spacing: normal;
+        text-transform: none;
+        text-indent: 0;
+        text-align: start;
+        tab-size: 8;
+        white-space: pre-wrap;
+        overflow-wrap: break-word;
+        word-break: normal;
+        scrollbar-gutter: stable;
+      }
+
+      /* The subject: one row like the name input next to it, scrolling
+         sideways instead of wrapping. */
+      .cp-token-field-wrap.single-line .cp-token-field {
+        line-height: normal;
+        white-space: pre;
+        overflow-wrap: normal;
+        scrollbar-gutter: auto;
+      }
+
+      .cp-token-field-mirror {
+        position: absolute;
+        inset: 0;
+        z-index: 0;
+        overflow: hidden;
+        pointer-events: none;
+        border-color: transparent;
+        background: var(--card);
+        color: var(--text);
+      }
+
+      .cp-token-field-wrap > .cp-token-field-input {
+        position: relative;
+        z-index: 1;
+        display: block;
+        overflow-y: auto;
+        background: transparent !important;
+        color: transparent !important;
+        caret-color: var(--text);
+      }
+
+      .cp-token-field-wrap.single-line > .cp-token-field-input {
+        min-height: 0;
+        resize: none;
+        overflow: hidden;
+      }
+
+      .cp-token-field-input::selection {
+        color: transparent;
+        background: rgba(11, 92, 171, 0.22);
+      }
+
+      .cp-token-mirror-chip {
+        position: relative;
+        border-radius: 999px;
+        background: #e0ecff;
+        color: transparent;
+      }
+
+      .cp-token-mirror-label {
+        position: absolute;
+        inset: 0;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        overflow: hidden;
+        white-space: nowrap;
+        color: #1d4ed8;
+        font-weight: 500;
+        pointer-events: none;
+      }
+
+      .cp-token-field-wrap:has(> .cp-token-field-input:disabled) > .cp-token-field-mirror {
+        background: #f7f9fc;
+        color: #6b7b8f;
+      }
+
+      .cp-token-menu {
+        position: fixed;
+        z-index: 10000;
+        box-sizing: border-box;
+        margin: 0;
+        padding: 4px;
+        overflow-y: auto;
+        overscroll-behavior: contain;
+        background: var(--card);
+        border: 1px solid #d9e5f2;
+        border-radius: 10px;
+        box-shadow: 0 16px 30px rgba(8, 30, 60, 0.18);
+        font-size: 12px;
+      }
+
+      .cp-token-menu[hidden] {
+        display: none;
+      }
+
+      .cp-token-menu-item {
+        display: flex;
+        flex-direction: column;
+        gap: 1px;
+        padding: 6px 10px;
+        border-radius: 8px;
+        color: var(--text);
+        cursor: pointer;
+      }
+
+      .cp-token-menu-item.active {
+        background: #e8f1fc;
+      }
+
+      .cp-token-menu-label,
+      .cp-token-menu-hint {
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+
+      .cp-token-menu-label {
+        color: #1d4ed8;
+        font-weight: 500;
+      }
+
+      .cp-token-menu-hint {
+        color: var(--muted);
+        font-size: 11px;
+        font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+      }
+
       .email-template-top-actions {
         display: flex;
         justify-content: flex-end;
@@ -3343,6 +3501,50 @@
         color: #d8e6f8;
       }
 
+      body[data-theme="dark"] .cp-token-field-mirror,
+      body[data-theme="dark"] .cp-token-field-wrap:has(> .cp-token-field-input:disabled) > .cp-token-field-mirror {
+        background: #1a2a3e;
+        color: #d8e6f8;
+      }
+
+      body[data-theme="dark"] .cp-token-field-wrap > .cp-token-field-input {
+        caret-color: #d8e6f8;
+      }
+
+      body[data-theme="dark"] .cp-token-field-input::selection {
+        background: rgba(102, 168, 255, 0.32);
+      }
+
+      body[data-theme="dark"] .cp-token-mirror-chip {
+        background: #2c4868;
+      }
+
+      body[data-theme="dark"] .cp-token-mirror-label {
+        color: #d8ecff;
+      }
+
+      body[data-theme="dark"] .cp-token-menu {
+        background: #1a2a3e;
+        border-color: #456181;
+        box-shadow: 0 16px 30px rgba(0, 0, 0, 0.45);
+      }
+
+      body[data-theme="dark"] .cp-token-menu-item {
+        color: #d8e6f8;
+      }
+
+      body[data-theme="dark"] .cp-token-menu-item.active {
+        background: #2c4868;
+      }
+
+      body[data-theme="dark"] .cp-token-menu-label {
+        color: #d8ecff;
+      }
+
+      body[data-theme="dark"] .cp-token-menu-hint {
+        color: #9eb4cd;
+      }
+
       body[data-theme="dark"] .country-prefix-dropdown-btn {
         background: #1a2a3e;
         border-color: #456181;
@@ -3595,7 +3797,7 @@
                 <input id="emailTemplateNameInput" type="text" placeholder="Template name" aria-label="Template name" />
               </div>
               <div class="field">
-                <input id="emailTemplateSubjectInput" type="text" placeholder="Subject" aria-label="Subject" />
+                <textarea id="emailTemplateSubjectInput" rows="1" placeholder="Subject" aria-label="Subject"></textarea>
               </div>
               <div class="email-template-top-actions">
                 <span id="emailTemplateSaveState" class="email-template-save-state" data-state="saved">Saved</span>

@@ -88,13 +88,18 @@ Main domain scope is `https://app.hubspot.com/*`.
     `gender`) then every non-hidden HubSpot property from the
     `hubspotPropertyDefs::<portalId>` cache (popup's current portal, else the
     most recently fetched). No cache: built-ins only
-  - TinyMCE bodies: `setupTinyMceEditor(editor, { onChange })` converts
-    `[key]` <-> chip spans on BeforeSetContent/GetContent and adds the "@"
-    autocompleter
-  - Plain fields: `attachTextField(textarea, { singleLine })` paints chips
-    in a mirror under a transparent textarea; read/write through
-    `getStoredValue` / `setStoredValue`, never `.value`
-  - Stored text never changes: chips exist only inside the editors
+  - TinyMCE bodies (email, note): `setupTinyMceEditor(editor, { onChange })`
+    converts `[key]` <-> chip spans on BeforeSetContent/GetContent, adds the
+    "@" autocompleter (Enter/Tab pick) and puts `[key]` on the clipboard.
+    Code that reads editor DOM text uses `textWithTokens(node)` (a chip's
+    `textContent` is its label); the email link dialog does
+  - Plain fields (WhatsApp body, email subject): `attachTextField(textarea,
+    { singleLine })` paints chips in a mirror under a transparent textarea.
+    Read/write through `getStoredValue` / `setStoredValue`, never `.value`:
+    `.value` holds labels marked with a word joiner. The subject is a
+    one-row `<textarea>` (`singleLine`) that scrolls sideways like an input
+  - Stored text never changes: chips exist only inside the editors. Unknown
+    keys stay literal; `[email]` typed or pasted becomes a chip
 
 - `popup/emailTemplates.js`
   - Email template draft CRUD/editor rendering
@@ -299,6 +304,9 @@ Import/export format in Settings is strict and current-only:
   - Left: template list
   - Right: active template editor
   - Autosave state + delete controls
+  - "@" in the email subject/body, WhatsApp body and note body opens a field
+    list; picks show as label chips, saved as `[internal_name]`. Cloud
+    (team) templates stay read-only
 
 - Email template picker overlay (`#emailTemplatePickOverlay`)
 - WhatsApp template picker overlay (`#whatsappTemplatePickOverlay`)
@@ -372,7 +380,9 @@ Import/export format in Settings is strict and current-only:
   `hubspotPropertyDefs::<portalId>` for `TIMING.content.hubspotPropertyDefsCacheMs`).
   Inline email/note/WhatsApp templates resolve `[internal_name]` for any
   record property (dropdowns print option labels); built-in tokens and
-  sidebar values come first, and if HubSpot can't be read only those work
+  sidebar values come first, and if HubSpot can't be read only those work.
+  The popup's "@" field list reads the same cache (`popup/tokenFields.js`),
+  so a cache shape change breaks both
 
 - dark mode toggle in the top bar: `#hs-global-toolbar-icons` (the icon row),
   inserted before the direct child holding
@@ -419,6 +429,8 @@ Manual smoke test:
 6. Check row `WhatsApp` picker -> opens WhatsApp link with template text.
 7. Check row `Notes` load + save note.
 8. Check Active Tab page actions on a single open contact page.
+9. In each template editor type `@`, pick a field, check the chip, and
+   check the saved/exported template still reads `[internal_name]`.
 
 ## Editing Guidelines
 

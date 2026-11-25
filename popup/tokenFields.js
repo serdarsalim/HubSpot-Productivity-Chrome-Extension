@@ -22,6 +22,7 @@
   const MENU_WIDTH_PX = 260;
   const MENU_MAX_HEIGHT_PX = 256;
   const MENU_EDGE_PX = 8;
+  const MENU_FIELD_GAP_PX = 4;
 
   const WORD_JOINER = "\u2060";
   const NBSP = "\u00a0";
@@ -634,18 +635,6 @@
     field.mirror.scrollLeft = field.el.scrollLeft;
   }
 
-  // The subject grows with its content instead of scrolling (a scrollbar
-  // would narrow only the textarea and the layers would wrap apart).
-  function growField(field) {
-    if (!field.singleLine) return;
-    const el = field.el;
-    if (!el.isConnected || !el.getClientRects().length) return;
-    const style = window.getComputedStyle(el);
-    const borders = (parseFloat(style.borderTopWidth) || 0) + (parseFloat(style.borderBottomWidth) || 0);
-    el.style.height = "0px";
-    el.style.height = `${el.scrollHeight + borders}px`;
-  }
-
   // Re-derive the shown text with the current labels. Saved text is
   // unchanged by construction; the caret keeps its place.
   function reseedField(field) {
@@ -665,7 +654,6 @@
       }
     }
     renderMirror(field);
-    growField(field);
   }
 
   // Replace a range through the browser's editing commands so the change
@@ -928,8 +916,8 @@
     probe.style.visibility = "hidden";
     probe.style.boxSizing = "content-box";
     probe.style.border = "0";
-    probe.style.whiteSpace = "pre-wrap";
-    probe.style.overflowWrap = "break-word";
+    probe.style.whiteSpace = style.whiteSpace;
+    probe.style.overflowWrap = style.overflowWrap;
     probe.style.width = `${Math.max(0, el.clientWidth - paddingX)}px`;
     probe.textContent = el.value.slice(0, el.selectionEnd ?? 0);
     const marker = document.createElement("span");
@@ -938,7 +926,7 @@
     probe.appendChild(marker);
     document.body.appendChild(probe);
     const box = el.getBoundingClientRect();
-    const lineHeight = parseFloat(style.lineHeight) || (parseFloat(style.fontSize) || 14) * 1.4;
+    const lineHeight = parseFloat(style.lineHeight) || marker.offsetHeight || (parseFloat(style.fontSize) || 14) * 1.4;
     const left = box.left + (parseFloat(style.borderLeftWidth) || 0) + marker.offsetLeft - el.scrollLeft;
     const top = box.top + (parseFloat(style.borderTopWidth) || 0) + marker.offsetTop - el.scrollTop;
     probe.remove();
@@ -950,6 +938,12 @@
   function positionMenu(field) {
     if (!isMenuOpenFor(field)) return;
     const caret = caretViewportRect(field.el);
+    if (field.singleLine) {
+      // One row: open clear of the field instead of over its bottom edge.
+      const box = field.el.getBoundingClientRect();
+      caret.top = box.top - MENU_FIELD_GAP_PX;
+      caret.bottom = box.bottom + MENU_FIELD_GAP_PX;
+    }
     const viewportWidth = window.innerWidth;
     const viewportHeight = window.innerHeight;
     const width = Math.min(MENU_WIDTH_PX, viewportWidth - MENU_EDGE_PX * 2);
@@ -990,7 +984,6 @@
       el.setSelectionRange(selection.start, selection.end, selection.direction);
     }
     renderMirror(field);
-    growField(field);
     field.lastSel = readSelection(el);
     updateMenu(field);
   }
@@ -1000,6 +993,10 @@
     if (!isEditable(el)) return;
     if (field.singleLine && (event.inputType === "insertLineBreak" || event.inputType === "insertParagraph")) {
       event.preventDefault();
+      return;
+    }
+    if (event.inputType === "insertFromDrop" && typeof event.data === "string") {
+      onDropInput(field, event);
       return;
     }
     // `[email]` typed by hand becomes a chip the moment its bracket closes.
@@ -1085,11 +1082,42 @@
     replaceRange(field, start, end, text);
   }
 
+  // A drop lands where the pointer is, which can be inside a chip's text.
+  // Put it beside the chip (the nearer edge) and, as with paste, let `[key]`
+  // text arrive as chips.
+  function onDropInput(field, event) {
+    const el = field.el;
+    const { start, end } = readSelection(el);
+    let at = start;
+    if (start === end) {
+      const chip = chipRanges(field).find((range) => start > range.start && start < range.end);
+      if (chip) at = start - chip.start <= chip.end - start ? chip.start : chip.end;
+    }
+    let text = event.data.replace(/\r\n?/g, "\n");
+    if (field.singleLine) text = text.replace(/\n/g, " ");
+    text = storedToDisplay(text, field.map);
+    if (at === start && text === event.data) return;
+    event.preventDefault();
+    replaceRange(field, at, start === end ? at : end, text);
+  }
+
+  // Dragged text carries the stored form, like a copy.
+  function onDragStart(field, event) {
+    const { start, end } = readSelection(field.el);
+    if (start === end || !event.dataTransfer) return;
+    event.dataTransfer.setData("text/plain", displayToStored(field.el.value.slice(start, end), field.map));
+  }
+
   function onBlur(field) {
     closeMenu(field);
     field.pointerDown = false;
     field.composing = false;
     reseedField(field);
+    // Like a text input, a long subject shows its start again on blur.
+    if (field.singleLine) {
+      field.el.scrollLeft = 0;
+      syncMirrorScroll(field);
+    }
   }
 
   function bindDocumentListeners() {
@@ -1122,14 +1150,13 @@
       true
     );
     window.addEventListener("resize", () => {
-      for (const field of textFields.values()) growField(field);
       if (menuOwner) positionMenu(menuOwner);
     });
   }
 
-  // Turn a template textarea into a chip field. `singleLine` (the subject):
-  // Enter is swallowed, pasted newlines become spaces and the field grows
-  // with its content.
+  // Turn a template textarea into a chip field. `singleLine` (the subject)
+  // looks and scrolls like a text input: one row that never wraps, Enter is
+  // swallowed and pasted newlines become spaces.
   function attachTextField(el, options = {}) {
     if (!el || !el.parentNode || textFields.has(el) || typeof document === "undefined") return null;
     bindDocumentListeners();
@@ -1180,6 +1207,7 @@
     el.addEventListener("copy", (event) => onCopy(field, event, false));
     el.addEventListener("cut", (event) => onCopy(field, event, true));
     el.addEventListener("paste", (event) => onPaste(field, event));
+    el.addEventListener("dragstart", (event) => onDragStart(field, event));
     el.addEventListener("compositionstart", () => {
       field.composing = true;
     });
@@ -1188,7 +1216,6 @@
     });
 
     renderMirror(field);
-    growField(field);
     return field;
   }
 
@@ -1223,7 +1250,6 @@
     field.lastSel = null;
     closeMenu(field);
     renderMirror(field);
-    growField(field);
   }
 
   if (globalThis.chrome?.storage?.onChanged?.addListener) {
