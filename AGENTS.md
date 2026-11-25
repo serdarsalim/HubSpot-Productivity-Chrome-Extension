@@ -337,6 +337,15 @@ Import/export format in Settings is strict and current-only:
   `[role='button'][aria-expanded]` collapse toggle that contains
   `[data-selenium-test='crm-card-title']`
 
+- HubSpot internal APIs (same-origin, `hubspotapi-csrf` cookie header):
+  `/api/inbounddb-objects/v1/crm-objects/0-1/<id>` (a record's full
+  properties) and `/api/properties/v4/0-1` (property list with labels and
+  dropdown options; slimmed and cached in `chrome.storage.local` under
+  `hubspotPropertyDefs::<portalId>` for `TIMING.content.hubspotPropertyDefsCacheMs`).
+  Inline email/note/WhatsApp templates resolve `[internal_name]` for any
+  record property (dropdowns print option labels); built-in tokens and
+  sidebar values come first, and if HubSpot can't be read only those work
+
 - dark mode toggle in the top bar: `#hs-global-toolbar-icons` (the icon row),
   inserted before the direct child holding
   `#hs-global-toolbar-notifications-list-item`. Writes `themeMode` into

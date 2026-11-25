@@ -1973,6 +1973,111 @@
     return map;
   }
 
+  // HubSpot's contact property list: internal name, label, type and dropdown
+  // options. Used to print dropdown labels ("Hanım", not "Kadin") and, from the
+  // website's Fields page, to pick properties for templates. Read through the
+  // rep's own HubSpot session; kept slim and cached per account.
+  const HUBSPOT_PROPERTY_DEFS_PREFIX = "hubspotPropertyDefs::";
+  const hubspotPropertyDefsState = { portalId: "", fetchedAt: 0, defs: null, inFlight: null };
+
+  function slimHubSpotPropertyDefinitions(raw) {
+    const source = Array.isArray(raw) ? raw : [];
+    const defs = [];
+    for (const entry of source) {
+      const prop = entry?.property || entry;
+      const name = cleanText(prop?.name || "").toLowerCase();
+      if (!name || prop?.deleted === true) continue;
+      defs.push({
+        name,
+        label: cleanText(prop?.label || "") || name,
+        type: cleanText(prop?.type || ""),
+        fieldType: cleanText(prop?.fieldType || ""),
+        group: cleanText(prop?.groupName || ""),
+        hidden: prop?.hidden === true,
+        hubspotDefined: prop?.hubspotDefined === true,
+        options: (Array.isArray(prop?.options) ? prop.options : [])
+          .filter((option) => option && option.hidden !== true)
+          .map((option) => ({ value: String(option.value ?? ""), label: cleanText(option.label || "") }))
+      });
+    }
+    return defs;
+  }
+
+  async function fetchHubSpotPropertyDefinitions(options = {}) {
+    const portalId = getHubSpotPortalId();
+    const csrf = readBrowserCookie("hubspotapi-csrf");
+    if (!portalId || !csrf) return null;
+
+    const ttlMs = Number(TIMING.hubspotPropertyDefsCacheMs || 6 * 60 * 60 * 1000);
+    const fresh = (fetchedAt) => Date.now() - Number(fetchedAt || 0) < ttlMs;
+    const state = hubspotPropertyDefsState;
+    if (!options.force && state.portalId === portalId && state.defs && fresh(state.fetchedAt)) return state.defs;
+    if (state.inFlight && state.portalId === portalId) return state.inFlight;
+
+    state.portalId = portalId;
+    state.inFlight = (async () => {
+      const storageKey = `${HUBSPOT_PROPERTY_DEFS_PREFIX}${portalId}`;
+      if (!options.force) {
+        const stored = await readStorageArea("local", [storageKey]).catch(() => ({}));
+        const cached = stored?.[storageKey];
+        if (cached && Array.isArray(cached.defs) && fresh(cached.fetchedAt)) {
+          state.defs = cached.defs;
+          state.fetchedAt = cached.fetchedAt;
+          return cached.defs;
+        }
+      }
+
+      const res = await fetch(`/api/properties/v4/0-1?portalId=${encodeURIComponent(portalId)}`, {
+        credentials: "include",
+        headers: { "X-HubSpot-CSRF-hubspotapi": csrf }
+      });
+      if (!res.ok) throw new Error(`HubSpot property list failed (${res.status}).`);
+      const defs = slimHubSpotPropertyDefinitions(await res.json());
+      const fetchedAt = Date.now();
+      state.defs = defs;
+      state.fetchedAt = fetchedAt;
+      try {
+        await chrome.storage.local.set({ [storageKey]: { fetchedAt, defs } });
+      } catch (_error) {
+        // Cache is optional; the in-memory copy still serves this page.
+      }
+      return defs;
+    })().finally(() => {
+      state.inFlight = null;
+    });
+    return state.inFlight;
+  }
+
+  // Prints a stored HubSpot value the way HubSpot shows it: dropdown and
+  // checkbox labels instead of internal values, dates as dates.
+  function formatPropertyForTemplate(rawValue, def) {
+    const raw = cleanText(rawValue);
+    if (!raw) return "";
+    if (!def) return formatHubSpotPropertyValue(raw);
+
+    if (def.type === "enumeration" || def.type === "bool") {
+      const labels = new Map((def.options || []).map((option) => [option.value, option.label]));
+      return raw
+        .split(";")
+        .map((part) => part.trim())
+        .filter(Boolean)
+        .map((part) => labels.get(part) || part)
+        .join(", ");
+    }
+
+    if (def.type === "date" || def.type === "datetime") {
+      const date = /^\d+$/.test(raw) ? new Date(Number(raw)) : new Date(raw);
+      if (!Number.isNaN(date.getTime())) {
+        return def.type === "date"
+          ? date.toLocaleDateString("tr-TR", { timeZone: "UTC" })
+          : date.toLocaleDateString("tr-TR");
+      }
+      return raw;
+    }
+
+    return raw;
+  }
+
   function formatHubSpotPropertyValue(value) {
     // Date/datetime properties arrive as epoch milliseconds; anything else
     // passes through untouched.
@@ -5171,6 +5276,36 @@
     return tokens;
   }
 
+  // Tokens the extension computes itself; HubSpot's raw properties never
+  // replace them (e.g. [firstname] is the first word of the shown name).
+  const BUILT_IN_TOKEN_KEYS = new Set([
+    "name", "gender", "first_name", "firstname", "full_name", "fullname",
+    "owner", "email", "phone", "record_id", "recordid"
+  ]);
+
+  // Sidebar tokens plus every property on the record, keyed by HubSpot's
+  // internal name ([program_interest]), which is what the website's property
+  // picker inserts. If HubSpot can't be read, the sidebar tokens still work.
+  async function buildFullTemplateTokens(context) {
+    const tokens = buildInlineTemplateTokens(context);
+    try {
+      const [props, defs] = await Promise.all([
+        fetchHubSpotContactProperties(context?.recordId),
+        fetchHubSpotPropertyDefinitions().catch(() => null)
+      ]);
+      if (!props) return tokens;
+      const defByName = new Map((defs || []).map((def) => [def.name, def]));
+      for (const [name, raw] of Object.entries(props)) {
+        const key = inlineTokenKey(name);
+        if (!key || BUILT_IN_TOKEN_KEYS.has(key)) continue;
+        tokens[key] = formatPropertyForTemplate(raw, defByName.get(name));
+      }
+    } catch (_error) {
+      // Sidebar tokens only.
+    }
+    return tokens;
+  }
+
   function escapeTokenValues(tokens) {
     const escaped = {};
     for (const [key, value] of Object.entries(tokens || {})) {
@@ -5281,7 +5416,7 @@
 
   async function applyInlineEmailTemplate(template) {
     const context = getInlineContactContextOrThrow();
-    const tokens = buildInlineTemplateTokens(context);
+    const tokens = await buildFullTemplateTokens(context);
     const escapedTokens = escapeTokenValues(tokens);
     const subject = applyInlineTemplateTokens(template?.subject || "", tokens).trim();
     const bodyHtml = applyInlineTemplateTokens(template?.body || "", escapedTokens).trim();
@@ -5293,7 +5428,7 @@
 
   async function applyInlineNoteTemplate(template, dialog) {
     const context = getInlineContactContextOrThrow();
-    const tokens = buildInlineTemplateTokens(context);
+    const tokens = await buildFullTemplateTokens(context);
     const filledBodyHtml = applyInlineTemplateTokens(template?.body || "", tokens).trim();
     const noteBody = htmlToPlainText(filledBodyHtml) || filledBodyHtml;
     if (!noteBody) throw new Error("Selected note template is empty.");
@@ -5313,7 +5448,7 @@
 
   async function applyInlineWhatsappTemplate(template) {
     const context = getInlineContactContextOrThrow();
-    const tokens = buildInlineTemplateTokens(context);
+    const tokens = await buildFullTemplateTokens(context);
     const phoneDigits =
       String(context?.contact?.phoneDigits || "").replace(/\D/g, "") ||
       String(normalizePhone(context?.contact?.values?.phone || "", contactTemplateState.countryPrefix) || "").replace(/\D/g, "");

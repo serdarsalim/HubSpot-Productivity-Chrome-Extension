@@ -22,7 +22,10 @@
       noteReadRetryAttempts: 14,
       noteReadRetryDelayMs: 450,
       emailComposerOpenAttempts: 20,
-      emailComposerOpenDelayMs: 300
+      emailComposerOpenDelayMs: 300,
+      // HubSpot's property list (names, labels, dropdown options) changes
+      // rarely; re-read it at most this often per account.
+      hubspotPropertyDefsCacheMs: 6 * 60 * 60 * 1000
     }),
     background: Object.freeze({
       // Opening template search in HubSpot asks the website whether a team's
