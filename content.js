@@ -2223,7 +2223,9 @@
 
   function describeUnresolvedToken(token) {
     const key = String(token || "").toLowerCase();
-    if (key.startsWith("custom.documentlink")) return "it contains a tracked document link";
+    // HubSpot wraps document links in {{ if custom.documentExists(...) }}, so
+    // check this before the generic conditional case.
+    if (/custom\.document(link|exists)/.test(key)) return "it contains a tracked document link";
     if (key.startsWith("custom.")) return "it uses a HubSpot-only field";
     if (/^(#|\/|if|else|end)/.test(key)) return "it uses conditional logic";
     if (key.startsWith("sender.") || key.startsWith("owner.")) return "the sender could not be read";
@@ -2500,6 +2502,19 @@
 
       .cp-cts-sidebar-header {
         padding: 15px 16px 12px;
+      }
+
+      /* Floats over the list so a notice never pushes the search box down. */
+      .cp-cts-sidebar .cp-cts-status {
+        position: absolute;
+        right: 10px;
+        bottom: 10px;
+        left: 10px;
+        z-index: 1;
+        border: 1px solid #dfe3eb;
+        border-radius: 8px;
+        background: #ffffff;
+        box-shadow: 0 6px 20px rgba(15, 23, 42, 0.18);
       }
 
       .cp-cts-sidebar-brand {
@@ -2812,10 +2827,10 @@
           if (notice === picker?.dropdown) picker.sections = null;
           notice.innerHTML =
             "<div class='cp-cts-notice'>" +
-            `<span>Can't fill this one here because ${escapeHtml(cleanText(result.reason || ""))}.</span>` +
+            `<span>HubSpot has to insert this one because ${escapeHtml(cleanText(result.reason || ""))}.</span>` +
             `<button type='button' class='cp-cts-notice-btn' data-cts-open-picker='${escapeHtml(
               String(template.id)
-            )}'>Open in HubSpot</button>` +
+            )}'>Insert with HubSpot</button>` +
             "</div>";
         }
         return;
