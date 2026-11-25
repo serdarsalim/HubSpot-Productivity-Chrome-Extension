@@ -391,6 +391,10 @@ Import/export format in Settings is strict and current-only:
   `#hs-global-toolbar-notifications-list-item`. Writes `themeMode` into
   `popupSettings`, same as the popup's theme button
 
+- Dark mode (Dark Reader) must not rewrite inline styles inside `.ProseMirror`
+  editors (`DARK_READER_FIXES` in `content.js`): ProseMirror redraws restyled
+  nodes, and the two loop until the tab freezes on colored templates
+
 When fixing, prefer scoped scoring heuristics over brittle class selectors.
 
 Timing/retry tuning:

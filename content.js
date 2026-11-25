@@ -54,6 +54,21 @@
     contrast: 90,
     sepia: 10
   });
+  // HubSpot's editors (ProseMirror) redraw any node whose inline style
+  // changes. Dark Reader rewrites inline colors on every new node, so pasting
+  // or inserting colored text (most HubSpot templates) ping-pongs between
+  // the two and froze the tab for 30+ seconds. Dark Reader leaves editor
+  // inline styles alone; the CSS below keeps that text readable instead.
+  const DARK_READER_FIXES = Object.freeze({
+    invert: [],
+    css: [
+      ".ProseMirror [style*='color'] { color: ${#33475b} !important; }",
+      ".ProseMirror [style*='background'] { background-color: transparent !important; }"
+    ].join("\n"),
+    ignoreInlineStyle: [".ProseMirror *"],
+    ignoreImageAnalysis: [".ProseMirror img"],
+    disableStyleSheetsProxy: false
+  });
 
   function normalizeThemeMode(value) {
     return String(value || "").toLowerCase() === "dark" ? "dark" : "light";
@@ -79,7 +94,7 @@
       if (typeof darkReader.setFetchMethod === "function" && typeof globalThis.fetch === "function") {
         darkReader.setFetchMethod(globalThis.fetch.bind(globalThis));
       }
-      darkReader.enable(DARK_READER_THEME);
+      darkReader.enable(DARK_READER_THEME, DARK_READER_FIXES);
       return true;
     }
 
