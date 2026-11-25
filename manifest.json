@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Contact Point: WhatsApp & Email Templates for HubSpot",
-  "version": "2026.11.25.2",
+  "version": "2026.11.25.3",
   "description": "WhatsApp messages and email templates from any HubSpot contact, with shared team templates, note templates and a property filter.",
   "permissions": [
     "storage",
