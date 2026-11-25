@@ -2417,9 +2417,9 @@
 
       .cp-cts-source-icon {
         display: block;
-        flex: 0 0 16px;
-        width: 16px;
-        height: 16px;
+        flex: 0 0 13px;
+        width: 13px;
+        height: 13px;
         object-fit: contain;
       }
 
@@ -2732,7 +2732,7 @@
       const isHubSpot = sourceOf(template) === "hubspot";
       const sourceLabel = isHubSpot ? "HubSpot" : "Contact Point";
       const iconUrl = isHubSpot ? picker.hubSpotIconUrl : picker.contactPointIconUrl;
-      const sourceIcon = `<img class='cp-cts-source-icon' src='${escapeHtml(iconUrl)}' alt='${sourceLabel}' title='${sourceLabel}' width='16' height='16'>`;
+      const sourceIcon = `<img class='cp-cts-source-icon' src='${escapeHtml(iconUrl)}' alt='${sourceLabel}' title='${sourceLabel}' width='13' height='13'>`;
       const item = (
         `<button type='button' class='cp-cts-item' data-cts-template-id='${escapeHtml(
           String(template.id)
