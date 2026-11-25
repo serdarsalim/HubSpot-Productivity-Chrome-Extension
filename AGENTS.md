@@ -51,14 +51,15 @@ Main domain scope is `https://app.hubspot.com/*`.
     7. `popup/analytics.js`
     8. `popup/hubspotApi.js`
     9. `popup/settings.js`
-    10. `popup/emailTemplates.js`
-    11. `popup/whatsappTemplates.js`
-    12. `popup/noteTemplates.js`
-    13. `popup/activeTabView.js`
-    14. `popup/notesFlow.js`
-    15. `popup/contactsView.js`
-    16. `popup/exportUtils.js`
-    17. `popup.js` (bootstrap/events only)
+    10. `popup/tokenFields.js`
+    11. `popup/emailTemplates.js`
+    12. `popup/whatsappTemplates.js`
+    13. `popup/noteTemplates.js`
+    14. `popup/activeTabView.js`
+    15. `popup/notesFlow.js`
+    16. `popup/contactsView.js`
+    17. `popup/exportUtils.js`
+    18. `popup.js` (bootstrap/events only)
 
 - `popup.js`
   - Thin bootstrap/event wiring only
@@ -79,6 +80,21 @@ Main domain scope is `https://app.hubspot.com/*`.
   - Settings page render/load/save
   - Personal template import/export
   - Template page open/close orchestration
+
+- `popup/tokenFields.js` (`App.tokenFields`)
+  - "@" field picker and label chips in the personal template editors,
+    ported from the website's `src/lib/tokens` and token field components
+  - Field list: built-ins (`name`, `fullname`, `email`, `phone`, `owner`,
+    `gender`) then every non-hidden HubSpot property from the
+    `hubspotPropertyDefs::<portalId>` cache (popup's current portal, else the
+    most recently fetched). No cache: built-ins only
+  - TinyMCE bodies: `setupTinyMceEditor(editor, { onChange })` converts
+    `[key]` <-> chip spans on BeforeSetContent/GetContent and adds the "@"
+    autocompleter
+  - Plain fields: `attachTextField(textarea, { singleLine })` paints chips
+    in a mirror under a transparent textarea; read/write through
+    `getStoredValue` / `setStoredValue`, never `.value`
+  - Stored text never changes: chips exist only inside the editors
 
 - `popup/emailTemplates.js`
   - Email template draft CRUD/editor rendering
@@ -383,6 +399,7 @@ No formal test suite exists. Use:
 - `node --check popup/analytics.js`
 - `node --check popup/hubspotApi.js`
 - `node --check popup/settings.js`
+- `node --check popup/tokenFields.js`
 - `node --check popup/emailTemplates.js`
 - `node --check popup/whatsappTemplates.js`
 - `node --check popup/noteTemplates.js`
