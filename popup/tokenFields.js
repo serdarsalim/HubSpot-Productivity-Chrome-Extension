@@ -23,9 +23,9 @@
   const MENU_MAX_HEIGHT_PX = 256;
   const MENU_EDGE_PX = 8;
 
-  const WORD_JOINER = "⁠";
-  const NBSP = " ";
-  const ZERO_WIDTH_SPACE = "​";
+  const WORD_JOINER = "\u2060";
+  const NBSP = "\u00a0";
+  const ZERO_WIDTH_SPACE = "\u200b";
   const KEY_RE = /^[A-Za-z0-9_]+$/;
   // `[key]`, the format content.js replaces.
   const STORED_TOKEN_RE = /\[([A-Za-z0-9_]+)\]/g;
