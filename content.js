@@ -2905,8 +2905,14 @@
     const width = Math.min(344, bounds.left - 12);
     const hasTemplates = kindKey === "email" || COMPOSER_SEARCH_KINDS[kindKey].getTemplates().length > 0;
     const visible = hasTemplates && isVisible(dialog) && height >= 170;
-    const otherDialog = composerTemplateSearchState.kinds[kindKey === "email" ? "note" : "email"].dialog;
-    const docked = visible && picker.canDock && width >= 280 && !isComposerCovered(dialog, otherDialog, bounds);
+    // Covered: step aside without switching to the inline row, which would
+    // shift the composer's layout under whatever is covering it.
+    if (visible && isComposerCovered(dialog, picker.panel, { left: bounds.left, width: bounds.width, top, height })) {
+      picker.panel.toggleAttribute("hidden", true);
+      picker.row.toggleAttribute("hidden", true);
+      return;
+    }
+    const docked = visible && picker.canDock && width >= 280;
     if (docked) {
       const left = bounds.left - width;
       const position = `${left}:${top}:${width}:${height}`;
@@ -2934,14 +2940,15 @@
     }
   }
 
-  function isComposerCovered(dialog, otherDialog, bounds) {
-    if (!otherDialog?.isConnected) return false;
+  // Covered when whatever is on top at the composer's center (ignoring our
+  // own sidebar) is not the composer: the other composer, or a HubSpot
+  // modal such as "Select template". The sidebar sits on a top z-index, so
+  // it must step aside rather than paint over those.
+  function isComposerCovered(dialog, panel, bounds) {
     const x = bounds.left + bounds.width / 2;
     const y = bounds.top + bounds.height / 2;
-    const frontComposer = document.elementsFromPoint(x, y).find((element) =>
-      dialog.contains(element) || otherDialog.contains(element)
-    );
-    return !!frontComposer && otherDialog.contains(frontComposer);
+    const front = document.elementsFromPoint(x, y).find((element) => !panel?.contains(element));
+    return !!front && !dialog.contains(front);
   }
 
   function mountComposerSidebar(kindKey, row, dialog, inputWrap, input, dropdown) {
